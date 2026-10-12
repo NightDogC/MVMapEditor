@@ -1,5 +1,7 @@
 # MVMap
 
+Forked from https://github.com/TitaniumCladStudios/MVMap
+
 A metroidvania map editor. Paint rooms onto grid paper, colour them by area, connect them with doors, and model progression with locks and keys — then grey-box the inside of any room without leaving the tool.
 
 It's a single self-contained `index.html`. No build step, no dependencies, no server, no account.
