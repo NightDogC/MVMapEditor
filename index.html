@@ -243,6 +243,75 @@
         padding: 4px 8px;
         font-size: 11.5px;
       }
+      .tool .kb {
+        margin-left: auto;
+        font: 10px/1 var(--mono);
+        color: var(--tx-mute);
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 2px 4px;
+      }
+      .tool.sm .kb {
+        margin-left: 6px;
+      }
+      .tool.on .kb {
+        color: #cfe6ff;
+        border-color: var(--acc-2);
+        background: #1a2a3c;
+      }
+      .ord {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .ord button {
+        flex: 1;
+        background: var(--bg-3);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 2px 0;
+        font-size: 12px;
+        color: var(--tx-dim);
+      }
+      .ord button:hover:not(:disabled) {
+        color: var(--tx);
+        border-color: var(--line-2);
+      }
+      .ord button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .ord .pos {
+        flex: 1.4;
+        text-align: center;
+        font-size: 11px;
+        color: var(--tx-mute);
+        font-variant-numeric: tabular-nums;
+      }
+      .emoji-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 3px;
+      }
+      .emoji-grid button {
+        background: var(--bg-3);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 2px 0;
+        font-size: 15px;
+        line-height: 1.2;
+      }
+      .emoji-grid button.on {
+        border-color: var(--acc);
+        background: #21344a;
+      }
+      .emo {
+        width: 14px;
+        text-align: center;
+        flex: none;
+        font-size: 12px;
+      }
       .tools-sep {
         grid-column: 1 / -1;
         margin-top: 4px;
@@ -761,18 +830,19 @@
       <!-- ── Left rail ─────────────────────────────────────────────── -->
       <aside class="panel panel-left">
         <div class="tools" id="tools">
-          <button class="tool" data-tool="select"><span class="glyph">➤</span><span>Select</span></button>
-          <button class="tool" data-tool="paint"><span class="glyph">▩</span><span>Paint</span></button>
-          <button class="tool" data-tool="rect"><span class="glyph">▭</span><span>Rect</span></button>
-          <button class="tool" data-tool="erase"><span class="glyph">◌</span><span>Erase</span></button>
-          <button class="tool" data-tool="door"><span class="glyph">╫</span><span>Door</span></button>
-          <button class="tool" data-tool="key"><span class="glyph">✦</span><span>Key</span></button>
-          <button class="tool" data-tool="pan"><span class="glyph">✥</span><span>Pan</span></button>
+          <button class="tool" data-tool="select"><span class="glyph">➤</span><span>Select</span><span class="kb">V</span></button>
+          <button class="tool" data-tool="paint"><span class="glyph">▩</span><span>Paint</span><span class="kb">B</span></button>
+          <button class="tool" data-tool="rect"><span class="glyph">▭</span><span>Rect</span><span class="kb">R</span></button>
+          <button class="tool" data-tool="erase"><span class="glyph">◌</span><span>Erase</span><span class="kb">E</span></button>
+          <button class="tool" data-tool="door"><span class="glyph">╫</span><span>Door</span><span class="kb">D</span></button>
+          <button class="tool" data-tool="key"><span class="glyph">✦</span><span>Key</span><span class="kb">K</span></button>
+          <button class="tool" data-tool="pan"><span class="glyph">✥</span><span>Pan</span><span class="kb">H</span></button>
           <div class="tools-sep">Structures</div>
-          <button class="tool" data-tool="spaint" title="Structure paint (S)"><span class="glyph">▦</span><span>S-Paint</span></button>
-          <button class="tool" data-tool="srect" title="Structure rectangle (T)"><span class="glyph">▣</span><span>S-Rect</span></button>
-          <button class="tool" data-tool="serase" title="Structure erase (X)"><span class="glyph">⌫</span><span>S-Erase</span></button>
-          <button class="tool" data-tool="edge" title="Edge structure (P)"><span class="glyph">━</span><span>Edge</span></button>
+          <button class="tool" data-tool="spaint" title="Structure paint (S)"><span class="glyph">▦</span><span>S-Paint</span><span class="kb">S</span></button>
+          <button class="tool" data-tool="srect" title="Structure rectangle (T)"><span class="glyph">▣</span><span>S-Rect</span><span class="kb">T</span></button>
+          <button class="tool" data-tool="serase" title="Structure erase (X)"><span class="glyph">⌫</span><span>S-Erase</span><span class="kb">X</span></button>
+          <button class="tool" data-tool="edge" title="Edge structure (P)"><span class="glyph">━</span><span>Edge</span><span class="kb">P</span></button>
+          <button class="tool" data-tool="stamp" title="Emoji stamp (M)"><span class="glyph">☺</span><span>Stamp</span><span class="kb">M</span></button>
         </div>
 
         <section class="sect">
@@ -808,6 +878,15 @@
             <button class="mini" id="btn-add-edge" title="New edge structure">+</button>
           </div>
           <div id="edge-list" class="list"></div>
+        </section>
+
+        <section class="sect grow">
+          <div class="sect-head">
+            <h3>Stamps</h3>
+            <span class="count" id="stamp-count">0</span>
+            <button class="mini" id="btn-add-stamp" title="New emoji stamp">+</button>
+          </div>
+          <div id="stamp-list" class="list"></div>
         </section>
 
         <section class="sect">
@@ -861,10 +940,10 @@
         <button class="tb" id="detail-close">← Map</button>
         <strong id="detail-title">Room</strong>
         <div class="detail-tools" id="detail-tools">
-          <button class="tool sm" data-dtool="box"><span class="glyph">▭</span>Box</button>
-          <button class="tool sm" data-dtool="select"><span class="glyph">➤</span>Select</button>
-          <button class="tool sm" data-dtool="erase"><span class="glyph">◌</span>Erase</button>
-          <button class="tool sm" data-dtool="pan"><span class="glyph">✥</span>Pan</button>
+          <button class="tool sm" data-dtool="box"><span class="glyph">▭</span>Box<span class="kb">B</span></button>
+          <button class="tool sm" data-dtool="select"><span class="glyph">➤</span>Select<span class="kb">V</span></button>
+          <button class="tool sm" data-dtool="erase"><span class="glyph">◌</span>Erase<span class="kb">E</span></button>
+          <button class="tool sm" data-dtool="pan"><span class="glyph">✥</span>Pan<span class="kb">H</span></button>
         </div>
         <div class="detail-types" id="detail-types"></div>
         <div class="spacer"></div>
@@ -949,6 +1028,11 @@
           "#b8c0cc", "#7c879b", "#c9885a", "#e0555f", "#f0a13a", "#f0dc3a",
           "#5ad07a", "#5fd8cf", "#5aa9f0", "#a97af0", "#ef6fb5", "#d84c7a",
         ];
+        const STAMP_EMOJI = [
+          "⭐", "💎", "❤️", "🗝️", "💀", "👾", "🔥", "💧",
+          "⚡", "🌀", "🪜", "📦", "🧱", "⚙️", "🔒", "🚪",
+          "💾", "🛏️", "🛒", "👑", "🏁", "❓", "❗", "🕳️",
+        ];
         const BOX_TYPES = [
           { id: "solid", name: "Solid", color: "#7c879b" },
           { id: "platform", name: "Platform", color: "#3fb27f" },
@@ -974,6 +1058,7 @@
           spaint: "Drag to paint cells into the active structure · <kbd>Alt</kbd> erases · <kbd>Shift</kbd> starts a new structure",
           srect: "Drag a rectangle to fill the active structure · <kbd>Alt</kbd> clears it · <kbd>Shift</kbd> starts a new structure",
           serase: "Drag over cells to remove structure cells — rooms underneath are untouched",
+          stamp: "Click a cell to drop the active emoji stamp · <kbd>Alt</kbd>-click removes · <kbd>Shift</kbd> starts a new stamp",
           edge: "Drag along grid lines to draw an edge structure · click an edge to add or select · <kbd>Alt</kbd> removes · <kbd>Shift</kbd> starts a new one",
         };
 
@@ -989,6 +1074,8 @@
         // doc.detail{}  roomId -> { sub, boxes:[{id,x,y,w,h,type,label}] }  coords in sub-cells, absolute
         // doc.structures[]  { id, name, color, notes, cells:["x,y",…] }   a layer drawn over rooms
         // doc.edgeStructs[] { id, name, color, notes, edges:["o:x,y",…] } same edge convention as doors
+        // doc.stamps[]      { id, name, emoji, color, notes, cells:["x,y",…] } one emoji per cell, drawn on top
+        //   rooms/structures/edgeStructs/stamps/keys may carry hideName:true to hide their map label
         function newDoc(name) {
           const a = { id: uid("area"), name: "Area 1", color: AREA_COLORS[0] };
           return {
@@ -1004,6 +1091,7 @@
             detail: {},
             structures: [],
             edgeStructs: [],
+            stamps: [],
           };
         }
 
@@ -1028,6 +1116,12 @@
             s.cells = Array.isArray(s.cells) ? s.cells : [];
             if (typeof s.notes !== "string") s.notes = "";
           });
+          d.stamps = Array.isArray(d.stamps) ? d.stamps : [];
+          d.stamps.forEach((s) => {
+            s.cells = Array.isArray(s.cells) ? s.cells : [];
+            if (typeof s.notes !== "string") s.notes = "";
+            if (!s.emoji) s.emoji = STAMP_EMOJI[0];
+          });
           d.edgeStructs.forEach((s) => {
             s.edges = Array.isArray(s.edges) ? s.edges : [];
             if (typeof s.notes !== "string") s.notes = "";
@@ -1047,6 +1141,7 @@
           activeAreaId: null,
           activeStructId: null,
           activeEdgeId: null,
+          activeStampId: null,
           showFlow: false,
           showLabels: true,
           showStructs: true,
@@ -1067,6 +1162,7 @@
         let doorIndex = new Map(); // "o:x,y" -> door
         let structIndex = new Map(); // "x,y" -> structureId
         let edgeIndex = new Map(); // "o:x,y" -> edgeStructId
+        let stampIndex = new Map(); // "x,y" -> stampId
         let needsDraw = true;
         const undoStack = [];
         const redoStack = [];
@@ -1080,6 +1176,14 @@
           for (const s of S.doc.structures) for (const c of s.cells) structIndex.set(c, s.id);
           edgeIndex = new Map();
           for (const s of S.doc.edgeStructs) for (const e of s.edges) edgeIndex.set(e, s.id);
+          stampIndex = new Map();
+          for (const s of S.doc.stamps) for (const c of s.cells) stampIndex.set(c, s.id);
+        }
+        const stampById = (id) => S.doc.stamps.find((s) => s.id === id) || null;
+        function activeStamp() {
+          let s = stampById(S.activeStampId);
+          if (!s && S.sel && S.sel.type === "stamp") s = stampById(S.sel.id);
+          return s;
         }
         const structById = (id) => S.doc.structures.find((s) => s.id === id) || null;
         const edgeStructById = (id) => S.doc.edgeStructs.find((s) => s.id === id) || null;
@@ -1141,6 +1245,7 @@
           if (!roomById(S.activeRoomId)) S.activeRoomId = null;
           if (!structById(S.activeStructId)) S.activeStructId = null;
           if (!edgeStructById(S.activeEdgeId)) S.activeEdgeId = null;
+          if (!stampById(S.activeStampId)) S.activeStampId = null;
           if (S.detailRoomId && !roomById(S.detailRoomId)) closeDetail();
           if (S.detailRoomId) renderDetailInspector();
           commit();
@@ -1153,6 +1258,7 @@
           if (sel.type === "door") return S.doc.doors.some((d) => d.id === sel.id);
           if (sel.type === "struct") return !!structById(sel.id);
           if (sel.type === "edge") return !!edgeStructById(sel.id);
+          if (sel.type === "stamp") return !!stampById(sel.id);
           return false;
         }
         function undo() {
@@ -1340,6 +1446,7 @@
           for (const r of S.doc.rooms) for (const c of r.cells) { const [x, y] = unck(c); grow(x, y); }
           for (const k of S.doc.keys) grow(k.x, k.y);
           for (const s of S.doc.structures) for (const c of s.cells) { const [x, y] = unck(c); grow(x, y); }
+          for (const s of S.doc.stamps) for (const c of s.cells) { const [x, y] = unck(c); grow(x, y); }
           for (const s of S.doc.edgeStructs)
             for (const e of s.edges) {
               for (const [x, y] of edgeCells(unek(e))) grow(x, y);
@@ -1575,6 +1682,93 @@
           if (S.sel && S.sel.id === id) S.sel = null;
         }
 
+        /* ── Stamps (one emoji per cell, top layer) ─────────────────── */
+        function createStamp() {
+          const n = S.doc.stamps.length;
+          const s = {
+            id: uid("stamp"),
+            name: "Stamp " + (n + 1),
+            emoji: STAMP_EMOJI[n % STAMP_EMOJI.length],
+            color: STRUCT_COLORS[(n + 5) % STRUCT_COLORS.length],
+            notes: "",
+            cells: [],
+          };
+          S.doc.stamps.push(s);
+          S.activeStampId = s.id;
+          return s;
+        }
+        function setStampCell(k, st) {
+          const ownerId = stampIndex.get(k);
+          if (ownerId === st.id) return false;
+          if (ownerId) {
+            const owner = stampById(ownerId);
+            owner.cells = owner.cells.filter((c) => c !== k);
+          }
+          st.cells.push(k);
+          stampIndex.set(k, st.id);
+          return true;
+        }
+        function eraseStampCell(k) {
+          const ownerId = stampIndex.get(k);
+          if (!ownerId) return false;
+          const owner = stampById(ownerId);
+          owner.cells = owner.cells.filter((c) => c !== k);
+          stampIndex.delete(k);
+          return true;
+        }
+        function deleteStamp(id) {
+          S.doc.stamps = S.doc.stamps.filter((s) => s.id !== id);
+          if (S.activeStampId === id) S.activeStampId = null;
+          if (S.sel && S.sel.id === id) S.sel = null;
+        }
+        function shiftStampCells(pairs, dx, dy) {
+          if (!pairs.length) return;
+          const bySt = new Map();
+          for (const [st, c] of pairs) {
+            if (!bySt.has(st)) bySt.set(st, new Set());
+            bySt.get(st).add(c);
+          }
+          for (const [st, set] of bySt) st.cells = st.cells.filter((c) => !set.has(c));
+          reindex();
+          for (const [st, c] of pairs) {
+            const [x, y] = unck(c);
+            setStampCell(ck(x + dx, y + dy), st);
+          }
+        }
+
+        /* ── Ordering ───────────────────────────────────────────────── */
+        // List order is array order, which is also draw order: later entries paint over earlier ones.
+        /** The array a selection lives in, plus a peer test (rooms only reorder within their area). */
+        function orderScope(sel) {
+          if (!sel) return null;
+          const t = sel.type;
+          const arr =
+            t === "room" ? S.doc.rooms : t === "struct" ? S.doc.structures : t === "edge" ? S.doc.edgeStructs :
+            t === "stamp" ? S.doc.stamps : t === "lock" ? S.doc.locks : t === "key" ? S.doc.keys : null;
+          if (!arr) return null;
+          const item = arr.find((x) => x.id === sel.id);
+          if (!item) return null;
+          const peer = t === "room" ? (x) => x.areaId === item.areaId : () => true;
+          const peers = arr.filter(peer);
+          return { arr, item, peers, pos: peers.indexOf(item) };
+        }
+        /** Move the selection within its list: "top" | "up" | "down" | "bottom". */
+        function reorderSel(how) {
+          const sc = orderScope(S.sel);
+          if (!sc || sc.peers.length < 2) return false;
+          const { arr, item, peers, pos } = sc;
+          let to = how === "top" ? 0 : how === "bottom" ? peers.length - 1 : pos + (how === "up" ? -1 : 1);
+          to = clamp(to, 0, peers.length - 1);
+          if (to === pos) return false;
+          pushUndo();
+          const target = peers[to];
+          arr.splice(arr.indexOf(item), 1);
+          const ti = arr.indexOf(target);
+          arr.splice(to > pos ? ti + 1 : ti, 0, item);
+          commit();
+          return true;
+        }
+
         /** Shift the given [structure, cellKey] pairs by (dx,dy), displacing whatever sits at the destination. */
         function shiftStructCells(pairs, dx, dy) {
           if (!pairs.length) return;
@@ -1633,6 +1827,8 @@
           for (const st of S.doc.structures) for (const c of st.cells) if (owned.has(c)) movingSCells.push([st, c]);
           const movingEdges = [];
           for (const es of S.doc.edgeStructs) for (const k of es.edges) if (ownsEdge(unek(k))) movingEdges.push([es, k]);
+          const movingStamps = [];
+          for (const st of S.doc.stamps) for (const c of st.cells) if (owned.has(c)) movingStamps.push([st, c]);
 
           room.cells.forEach((c) => cellIndex.delete(c));
           room.cells = room.cells.map((c) => {
@@ -1652,6 +1848,7 @@
           reindex();
           shiftStructCells(movingSCells, dx, dy);
           shiftEdges(movingEdges, dx, dy);
+          shiftStampCells(movingStamps, dx, dy);
           // shift greybox geometry with the room
           const det = S.doc.detail[room.id];
           if (det) det.boxes.forEach((b) => { b.x += dx * det.sub; b.y += dy * det.sub; });
@@ -1796,6 +1993,7 @@
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             for (const room of S.doc.rooms) {
+              if (room.hideName) continue;
               const b = roomBBox(room);
               if (!b) continue;
               const cx = V.sx((b.x0 + b.w / 2) * CELL), cy = V.sy((b.y0 + b.h / 2) * CELL);
@@ -1933,12 +2131,13 @@
             ctx.fillText(text, cx, cy + 0.5);
           };
           for (const st of S.doc.structures) {
+            if (st.hideName) continue;
             const b = cellsBBox(st.cells);
             if (!b) continue;
             label(st.name, structColor(st), V.sx((b.x0 + b.w / 2) * CELL), V.sy((b.y0 + b.h / 2) * CELL));
           }
           for (const es of S.doc.edgeStructs) {
-            if (!es.edges.length) continue;
+            if (!es.edges.length || es.hideName) continue;
             // anchor on the edge nearest the middle of the set, just off the line
             let sx = 0, sy = 0;
             const mids = es.edges.map((k) => edgeMid(unek(k)));
@@ -2049,7 +2248,7 @@
               ctx.font = `${Math.round(r * 1.25)}px ${FONTF}`;
               ctx.fillText("✦", cx, cy + r * 0.06);
             }
-            if (z > 0.75) {
+            if (z > 0.75 && !k.hideName) {
               const fs = clamp(Math.round(10 * Math.min(1.3, z)), 9, 13);
               ctx.font = `500 ${fs}px ${FONTF}`;
               const tw = ctx.measureText(k.name).width;
@@ -2189,6 +2388,20 @@
             const st = activeStruct();
             col = st ? structColor(st) : STRUCT_COLORS[S.doc.structures.length % STRUCT_COLORS.length];
           }
+          if (S.tool === "stamp") {
+            const st = activeStamp();
+            col = st ? structColor(st) : "#f0dc3a";
+            if (st && s >= 5) {
+              ctx.save();
+              ctx.globalAlpha = 0.45;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.font = `${Math.max(6, Math.round(s * 0.62))}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", ${FONTF}`;
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(st.emoji, px + s / 2, py + s / 2 + s * 0.04);
+              ctx.restore();
+            }
+          }
           ctx.strokeStyle = col;
           ctx.lineWidth = 1.5;
           ctx.setLineDash([4, 3]);
@@ -2207,6 +2420,56 @@
           ctx.closePath();
         }
 
+        function drawStamps(ctx, V) {
+          const z = V.cam.zoom, s = CELL * z;
+          const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
+          const selCell = selId ? S.sel.cell : null;
+          const showNames = S.showStructLabels && z > 0.9;
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const fs = clamp(Math.round(9.5 * Math.min(1.3, z)), 8, 12);
+          const placed = [];
+          for (const st of S.doc.stamps) {
+            const col = structColor(st);
+            const isSel = st.id === selId;
+            for (const c of st.cells) {
+              const [x, y] = unck(c);
+              const px = V.sx(x * CELL), py = V.sy(y * CELL);
+              if (px > V.w || py > V.h || px + s < 0 || py + s < 0) continue;
+              const cx = px + s / 2, cy = py + s / 2;
+              const pad = Math.max(1, s * 0.08);
+              ctx.fillStyle = hexA(col, isSel ? 0.5 : 0.32);
+              roundRect(ctx, px + pad, py + pad, s - pad * 2, s - pad * 2, Math.min(6, s * 0.18));
+              ctx.fill();
+              if (isSel) {
+                ctx.lineWidth = c === selCell ? 2.2 : 1.4;
+                ctx.strokeStyle = c === selCell ? "#ffffff" : shade(col, 0.3);
+                ctx.stroke();
+              }
+              if (s >= 5) {
+                ctx.font = `${Math.max(6, Math.round(s * 0.62))}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", ${FONTF}`;
+                ctx.fillStyle = "#ffffff";
+                ctx.fillText(st.emoji, cx, cy + s * 0.04);
+              }
+              if (showNames && !st.hideName && st.name) {
+                ctx.font = `500 ${fs}px ${FONTF}`;
+                const tw = ctx.measureText(st.name).width;
+                const box = { x: cx - tw / 2 - 3, y: py + s + 1, w: tw + 6, h: fs + 3 };
+                // neighbouring stamps would stack their labels on top of each other — first one wins
+                if (!placed.some((b) => box.x < b.x + b.w && b.x < box.x + box.w && box.y < b.y + b.h && b.y < box.y + box.h)) {
+                  placed.push(box);
+                  ctx.fillStyle = "rgba(10,12,16,0.72)";
+                  ctx.fillRect(box.x, box.y, box.w, box.h);
+                  ctx.fillStyle = shade(col, 0.3);
+                  ctx.fillText(st.name, cx, py + s + 1 + fs / 2 + 1.5);
+                }
+              }
+            }
+          }
+          ctx.restore();
+        }
+
         function drawWorld(ctx, V, opts) {
           opts = opts || {};
           ctx.save();
@@ -2223,6 +2486,7 @@
           drawFlow(ctx, V);
           drawDoors(ctx, V);
           drawKeys(ctx, V);
+          if (S.showStructs) drawStamps(ctx, V);
           if (opts.cursor !== false) drawCursor(ctx, V);
           ctx.restore();
         }
@@ -2258,7 +2522,11 @@
         function pickAt(V, p) {
           const wx = V.wx(p.x), wy = V.wy(p.y);
           const c = { x: Math.floor(wx / CELL), y: Math.floor(wy / CELL) };
-          // keys first — they sit on top
+          // stamps are the top layer, then keys
+          if (S.showStructs) {
+            const sid = stampIndex.get(ck(c.x, c.y));
+            if (sid) return { type: "stamp", id: sid, cell: ck(c.x, c.y) };
+          }
           for (let i = S.doc.keys.length - 1; i >= 0; i--) {
             const k = S.doc.keys[i];
             const dx = wx - (k.x * CELL + CELL / 2), dy = wy - (k.y * CELL + CELL / 2);
@@ -2304,6 +2572,9 @@
               S.drag = { type: "move", room, startCell: c, moved: false, dx: 0, dy: 0, undone: false };
             } else if (hit && hit.type === "key") {
               S.drag = { type: "movekey", key: keyById(hit.id), startCell: c, moved: false, undone: false };
+            } else if (hit && hit.type === "stamp") {
+              S.activeStampId = hit.id;
+              S.drag = { type: "movestamp", st: stampById(hit.id), cell: hit.cell, undone: false };
             } else if (hit && hit.type === "struct") {
               S.activeStructId = hit.id;
               S.drag = { type: "movestruct", st: structById(hit.id), startCell: c, dx: 0, dy: 0, undone: false };
@@ -2336,6 +2607,29 @@
             pushUndo();
             S.drag = { type: "paint", layer: "struct", st: null, erase: true, seen: new Set() };
             applyPaint(c);
+            commit();
+            return;
+          }
+
+          if (S.tool === "stamp") {
+            const k = ck(c.x, c.y);
+            if (e.altKey) {
+              if (stampIndex.has(k)) { pushUndo(); eraseStampCell(k); commit(); }
+              return;
+            }
+            let st = activeStamp();
+            const here = stampIndex.get(k);
+            // plain click on an existing stamp selects it instead of stacking a duplicate
+            if (here && !e.shiftKey && (!st || here === st.id)) {
+              S.sel = { type: "stamp", id: here, cell: k };
+              S.activeStampId = here;
+              commit(true);
+              return;
+            }
+            pushUndo();
+            if (e.shiftKey || !st) st = createStamp();
+            setStampCell(k, st);
+            S.sel = { type: "stamp", id: st.id, cell: k };
             commit();
             return;
           }
@@ -2487,6 +2781,18 @@
               d.moved = true;
               commit();
             }
+          } else if (d.type === "movestamp") {
+            const k = ck(c.x, c.y);
+            // never stamp over a different stamp while dragging
+            if (k !== d.cell && !stampIndex.has(k)) {
+              if (!d.undone) { pushUndo(); d.undone = true; }
+              d.st.cells = d.st.cells.filter((z) => z !== d.cell);
+              reindex();
+              setStampCell(k, d.st);
+              d.cell = k;
+              if (S.sel && S.sel.type === "stamp") S.sel.cell = k;
+              commit();
+            }
           } else if (d.type === "movestruct" || d.type === "moveedge") {
             const dx = c.x - d.startCell.x, dy = c.y - d.startCell.y;
             if (dx !== d.dx || dy !== d.dy) {
@@ -2564,7 +2870,7 @@
            ══════════════════════════════════════════════════════════════ */
         const TOOL_KEYS = {
           v: "select", b: "paint", r: "rect", e: "erase", d: "door", k: "key", h: "pan",
-          s: "spaint", t: "srect", x: "serase", p: "edge",
+          s: "spaint", t: "srect", x: "serase", p: "edge", m: "stamp",
         };
 
         window.addEventListener("keydown", (e) => {
@@ -2605,6 +2911,11 @@
           if (tk) { setTool(tk); return; }
           if (e.key === "f") { fitWorld(); return; }
           if (e.key === "Escape") { S.sel = null; commit(true); return; }
+          if (e.code === "BracketLeft" || e.code === "BracketRight") {
+            const up = e.code === "BracketLeft";
+            reorderSel(e.shiftKey ? (up ? "top" : "bottom") : up ? "up" : "down");
+            return;
+          }
           if (e.key === "Enter" && S.sel && S.sel.type === "room") { openDetail(S.sel.id); return; }
           if (e.key === "Delete" || e.key === "Backspace") {
             if (!S.sel) return;
@@ -2615,6 +2926,11 @@
             else if (S.sel.type === "lock") deleteLock(S.sel.id);
             else if (S.sel.type === "struct") deleteStruct(S.sel.id);
             else if (S.sel.type === "edge") deleteEdgeStruct(S.sel.id);
+            else if (S.sel.type === "stamp") {
+              // a stamp picked on the map removes just that cell; one picked from the list removes the stamp
+              if (S.sel.cell && stampIndex.get(S.sel.cell) === S.sel.id) { eraseStampCell(S.sel.cell); S.sel = { type: "stamp", id: S.sel.id }; }
+              else deleteStamp(S.sel.id);
+            }
             commit();
           }
         });
@@ -2641,6 +2957,7 @@
           renderKeys();
           renderStructs();
           renderEdgeStructs();
+          renderStamps();
           renderInspector();
           $("#btn-undo").disabled = !undoStack.length;
           $("#btn-redo").disabled = !redoStack.length;
@@ -2781,6 +3098,25 @@
             .join("");
         }
 
+        function renderStamps() {
+          const host = $("#stamp-list");
+          $("#stamp-count").textContent = S.doc.stamps.length;
+          if (!S.doc.stamps.length) {
+            host.innerHTML = `<div class="empty">Emoji markers for single cells — save points, items, bosses… Hit + or use the Stamp tool.</div>`;
+            return;
+          }
+          const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
+          host.innerHTML = S.doc.stamps
+            .map(
+              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-stamp="${s.id}">
+                  <span class="emo">${esc(s.emoji)}</span>
+                  <span class="nm">${esc(s.name)}${s.id === S.activeStampId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  <span class="sub">${s.cells.length}</span>
+                </div>`
+            )
+            .join("");
+        }
+
         /* ── Inspector ─────────────────────────────────────────────── */
         function renderInspector() {
           const host = $("#inspector");
@@ -2794,12 +3130,49 @@
             }<br /><br />Select a room to rename, recolour, or grey-box it. Select a door to lock it. Select a lock to see which keys open it. Select a structure or edge structure to rename or recolour it.</div>`;
             return;
           }
-          if (S.sel.type === "struct") return inspectStruct(host, structById(S.sel.id));
-          if (S.sel.type === "edge") return inspectEdgeStruct(host, edgeStructById(S.sel.id));
-          if (S.sel.type === "room") return inspectRoom(host, roomById(S.sel.id));
-          if (S.sel.type === "door") return inspectDoor(host, S.doc.doors.find((d) => d.id === S.sel.id));
-          if (S.sel.type === "key") return inspectKey(host, keyById(S.sel.id));
-          if (S.sel.type === "lock") return inspectLock(host, lockById(S.sel.id));
+          const t = S.sel.type;
+          if (t === "struct") inspectStruct(host, structById(S.sel.id));
+          else if (t === "edge") inspectEdgeStruct(host, edgeStructById(S.sel.id));
+          else if (t === "stamp") inspectStamp(host, stampById(S.sel.id));
+          else if (t === "room") inspectRoom(host, roomById(S.sel.id));
+          else if (t === "door") inspectDoor(host, S.doc.doors.find((d) => d.id === S.sel.id));
+          else if (t === "key") inspectKey(host, keyById(S.sel.id));
+          else if (t === "lock") inspectLock(host, lockById(S.sel.id));
+          decorateInspector(host);
+        }
+
+        /** Shared extras slotted in above the inspector's action buttons: name visibility and list order. */
+        function decorateInspector(host) {
+          const sc = orderScope(S.sel);
+          if (!sc) return;
+          const named = ["room", "struct", "edge", "stamp", "key"].includes(S.sel.type);
+          let html = "";
+          if (named) {
+            html += `<label class="check"><input type="checkbox" id="i-showname" ${sc.item.hideName ? "" : "checked"} />
+              <span>Show name on map</span></label>`;
+          }
+          const n = sc.peers.length, pos = sc.pos;
+          html += `<div class="fld"><label>Order${S.sel.type === "room" ? " in area" : ""}</label>
+            <div class="ord">
+              <button data-ord="top" title="Move to top (Shift+[)" ${pos === 0 ? "disabled" : ""}>⤒</button>
+              <button data-ord="up" title="Move up ([)" ${pos === 0 ? "disabled" : ""}>↑</button>
+              <span class="pos">${pos + 1} / ${n}</span>
+              <button data-ord="down" title="Move down (])" ${pos === n - 1 ? "disabled" : ""}>↓</button>
+              <button data-ord="bottom" title="Move to bottom (Shift+])" ${pos === n - 1 ? "disabled" : ""}>⤓</button>
+            </div></div>`;
+          const wrap = document.createElement("div");
+          wrap.className = "inspector";
+          wrap.innerHTML = html;
+          const actions = host.querySelector(".btn-row:last-child");
+          host.insertBefore(wrap, actions || null);
+          const sn = $("#i-showname");
+          if (sn) sn.onchange = () => {
+            pushUndo();
+            if (sn.checked) delete sc.item.hideName;
+            else sc.item.hideName = true;
+            commit();
+          };
+          wrap.querySelectorAll("[data-ord]").forEach((b) => (b.onclick = () => reorderSel(b.dataset.ord)));
         }
 
         const colorChips = (colors, current, attr) =>
@@ -3035,6 +3408,58 @@
         const inspectStruct = (host, s) => inspectLayerItem(host, s, false);
         const inspectEdgeStruct = (host, s) => inspectLayerItem(host, s, true);
 
+        function inspectStamp(host, st) {
+          if (!st) return;
+          const col = structColor(st);
+          const cell = S.sel && S.sel.cell && stampIndex.get(S.sel.cell) === st.id ? S.sel.cell : null;
+          const room = cell ? roomAtCell(...unck(cell)) : null;
+          host.innerHTML = `
+            <div class="insp-title"><span class="emo">${esc(st.emoji)}</span><span class="kind">Stamp</span></div>
+            <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(st.name)}" placeholder="Save point, boss, chest…" /></div>
+            <div class="fld"><label>Emoji</label>
+              <input type="text" id="i-emoji" value="${esc(st.emoji)}" placeholder="Type or paste (Win + .)" />
+              <div class="emoji-grid" style="margin-top:4px">${STAMP_EMOJI.map(
+                (e) => `<button data-emoji="${esc(e)}" class="${e === st.emoji ? "on" : ""}">${e}</button>`
+              ).join("")}</div>
+            </div>
+            <div class="fld"><label>Tile colour</label>${colorChips(STRUCT_COLORS, st.color, "scolor")}
+              <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#b8c0cc"}" /><span>Custom colour</span></div>
+            </div>
+            <div class="fld"><label>Notes</label><textarea id="i-notes" placeholder="What is here, when it appears…">${esc(st.notes)}</textarea></div>
+            <div class="meta">Placed on ${st.cells.length} cell(s)${cell ? ` · this one at ${cell}${room ? " in " + esc(room.name) : ""}` : ""}${
+              S.activeStampId === st.id ? " · active stamp" : ""
+            }</div>
+            <div class="btn-row">
+              <button class="btn primary" id="i-draw">Stamp with it</button>
+              ${cell ? `<button class="btn" id="i-del-one">Remove this</button>` : ""}
+              <button class="btn danger" id="i-del">Delete</button>
+            </div>`;
+
+          $("#i-name").oninput = (e) => { st.name = e.target.value; needsDraw = true; renderStamps(); scheduleSave(); };
+          $("#i-notes").oninput = (e) => { st.notes = e.target.value; scheduleSave(); };
+          $("#i-emoji").oninput = (e) => {
+            const v = e.target.value.trim();
+            if (!v) return;
+            st.emoji = v;
+            needsDraw = true;
+            renderStamps();
+            scheduleSave();
+          };
+          undoOnFocus($("#i-name"), $("#i-notes"), $("#i-emoji"), $("#i-ccolor"));
+          host.querySelectorAll("[data-emoji]").forEach((b) => {
+            b.onclick = () => { pushUndo(); st.emoji = b.dataset.emoji; commit(); };
+          });
+          host.querySelectorAll("[data-scolor]").forEach((b) => {
+            b.onclick = () => { pushUndo(); st.color = b.dataset.scolor; commit(); };
+          });
+          $("#i-ccolor").oninput = (e) => { st.color = e.target.value; needsDraw = true; scheduleSave(); };
+          $("#i-ccolor").onchange = () => commit();
+          $("#i-draw").onclick = () => { S.activeStampId = st.id; setTool("stamp"); commit(true); };
+          const one = $("#i-del-one");
+          if (one) one.onclick = () => { pushUndo(); eraseStampCell(cell); S.sel = { type: "stamp", id: st.id }; commit(); };
+          $("#i-del").onclick = () => { pushUndo(); deleteStamp(st.id); commit(); };
+        }
+
         /** Text fields mutate on every keystroke — take one undo snapshot per editing session. */
         function undoOnFocus() {
           for (const el of arguments) if (el) el.addEventListener("focus", () => pushUndo());
@@ -3140,6 +3565,25 @@
             needsDraw = true;
           }
         });
+        $("#stamp-list").addEventListener("click", (e) => {
+          const row = e.target.closest("[data-stamp]");
+          if (!row) return;
+          S.sel = { type: "stamp", id: row.dataset.stamp };
+          S.activeStampId = row.dataset.stamp;
+          commit(true);
+        });
+        $("#stamp-list").addEventListener("dblclick", (e) => {
+          const row = e.target.closest("[data-stamp]");
+          const st = row && stampById(row.dataset.stamp);
+          if (st) { focusCells(st.cells); needsDraw = true; }
+        });
+        $("#btn-add-stamp").onclick = () => {
+          pushUndo();
+          const st = createStamp();
+          S.sel = { type: "stamp", id: st.id };
+          setTool("stamp");
+          commit();
+        };
         $("#btn-add-struct").onclick = () => {
           pushUndo();
           const st = createStruct();
@@ -3403,6 +3847,17 @@
                 dctx.lineTo(V.sx(x1 * f), V.sy(y1 * f));
               }
               dctx.stroke();
+            }
+            dctx.globalAlpha = 0.55;
+            dctx.textAlign = "center";
+            dctx.textBaseline = "middle";
+            dctx.font = `${Math.max(8, Math.round(cs * 0.5))}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", ${FONTF}`;
+            for (const st of S.doc.stamps) {
+              for (const c of st.cells) {
+                if (!set.has(c)) continue;
+                const [cx, cy] = unck(c);
+                dctx.fillText(st.emoji, V.sx((cx + 0.5) * sub * U), V.sy((cy + 0.5) * sub * U));
+              }
             }
             dctx.restore();
           }
@@ -3699,6 +4154,7 @@
           S.activeRoomId = null;
           S.activeStructId = null;
           S.activeEdgeId = null;
+          S.activeStampId = null;
           S.activeAreaId = S.doc.areas[0].id;
           undoStack.length = 0;
           redoStack.length = 0;
@@ -3750,6 +4206,16 @@
             <p>An <b>edge structure</b> lives on the grid lines instead of in cells, drawn as a thick bar — use it
                for platforms and ledges. With the <b>Edge</b> tool, drag along a grid line to lay a straight run of
                edges, or click a single edge. <b>Shift</b> starts a new one, <b>Alt</b> removes edges.</p>
+            <h3>Stamps</h3>
+            <p>A <b>stamp</b> drops one emoji onto a single cell, on the very top layer — save points, items,
+               bosses, shops. Like structures, each stamp has a name, colour and notes, and you can keep many of
+               them; pick the emoji from the inspector's palette or type any emoji. Click with the <b>Stamp</b> tool
+               to place the active one, <b>Shift</b>-click to start a new stamp, <b>Alt</b>-click to remove one.
+               Drag a placed stamp with <b>Select</b> to move just that cell.</p>
+            <h3>Names &amp; order</h3>
+            <p>Every inspector has <b>Show name on map</b> to hide one object's label, and <b>Order</b> buttons
+               to move the selection up or down its list (rooms reorder within their area). Lists draw in order,
+               so later entries paint over earlier ones.</p>
             <h3>Grey-boxing a room</h3>
             <p>Double-click any room (or press <b>Enter</b> with it selected) to open a subdivided grid for that
                room, and block out its interior with typed boxes — solid, platform, hazard, water, ladder, exit,
@@ -3770,11 +4236,14 @@
               <b>T</b><span>Structure rectangle</span>
               <b>X</b><span>Structure erase</span>
               <b>P</b><span>Edge structure (drag along grid lines)</span>
+              <b>M</b><span>Emoji stamp</span>
               <b>Shift + paint</b><span>Start a new room / structure</span>
               <b>Alt + paint</b><span>Erase instead</span>
               <b>F</b><span>Zoom to fit</span>
               <b>Enter</b><span>Grey-box selected room</span>
               <b>Del</b><span>Delete selection</span>
+              <b>[ / ]</b><span>Move selection up / down its list</span>
+              <b>Shift + [ / ]</b><span>Move selection to top / bottom</span>
               <b>Ctrl + Z / Y</b><span>Undo / redo</span>
               <b>Ctrl + S</b><span>Export JSON</span>
             </div>

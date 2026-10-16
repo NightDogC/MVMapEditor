@@ -61,6 +61,10 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Toggle them with **Show structures** / **Show structure names**.
 
+**Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a palette or type any), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
+
+**Names & order** — every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
+
 **Grey-box view** — double-click a room to open its cells subdivided 4×, 8×, or 16×, with the world-cell boundaries still drawn as heavy lines and the border doors rendered as anchors. Block out the interior with typed boxes: solid, platform, hazard, water, ladder, exit, item, enemy, note. Move, resize, and label them. Changing subdivision rescales existing boxes in place.
 
 **Storage** — autosaves to IndexedDB (localStorage fallback) with a **Maps…** library for multiple projects. Export/import JSON, export the whole map as a PNG.
@@ -85,6 +89,9 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 | `T` | Structure rectangle |
 | `X` | Structure erase |
 | `P` | Edge structure (drag along grid lines) |
+| `M` | Emoji stamp |
+| `[` / `]` | Move selection up / down its list |
+| `Shift` + `[` / `]` | Move selection to top / bottom |
 | `H` or hold `Space` | Pan |
 | `Shift` + paint | Start a new room / structure / edge structure |
 | `Alt` + structure paint / edge drag | Erase instead |
@@ -175,6 +182,11 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
       "notes": "Bomb it.", "cells": ["4,4", "4,5"] }
   ],
 
+  "stamps": [
+    { "id": "stamp_m1", "name": "Save Point", "emoji": "💾", "color": "#5aa9f0",
+      "notes": "", "cells": ["6,4"] }
+  ],
+
   "edgeStructs": [
     { "id": "edge_e1", "name": "Ledge", "color": "#f0a13a",
       "notes": "", "edges": ["h:3,5", "h:4,5"] }   // "o:x,y", same convention as doors
@@ -192,6 +204,10 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 - `"h"` at `(x, y)` is the horizontal edge dividing cells `(x, y-1)` and `(x, y)`
 
 **Structure cells** use the same `"x,y"` keys as rooms, on an independent layer: a cell can be in one room *and* one structure. Each cell belongs to at most one structure; painting it into another moves it.
+
+**Stamp cells** are `"x,y"` keys on their own layer; each cell holds at most one stamp.
+
+**`hideName: true`** may appear on rooms, structures, edge structures, stamps and keys to hide that object's label on the map. When absent the name is shown.
 
 **Edge-structure edges** are `"o:x,y"` strings using the door edge convention above, e.g. `"h:3,5"`. Each edge belongs to at most one edge structure.
 
@@ -222,4 +238,4 @@ README.md
 
 Tested in Chromium-based browsers. Requires Canvas 2D, IndexedDB or localStorage, and pointer events — nothing exotic, but there's no polyfill layer, so a very old browser will simply fail rather than degrade.
 
-The whole thing is about 3,900 lines of plain HTML, CSS, and JavaScript in one file, organised into 18 numbered sections. `Ctrl+F` for `═══` to jump between them.
+The whole thing is about 4,300 lines of plain HTML, CSS, and JavaScript in one file, organised into 18 numbered sections. `Ctrl+F` for `═══` to jump between them.
