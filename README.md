@@ -61,7 +61,9 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Toggle them with **Show structures** / **Show structure names**.
 
-**Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a palette or type any), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
+**Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
+
+**Right-click** — configurable at the bottom of the left panel. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
 **Names & order** — every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
 
@@ -95,6 +97,7 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 | `H` or hold `Space` | Pan |
 | `Shift` + paint | Start a new room / structure / edge structure |
 | `Alt` + structure paint / edge drag | Erase instead |
+| Right-click | Remove, or hold and drag to pan (configurable) |
 | `Alt` + paint | Erase instead |
 | `Alt` + click door | Delete door |
 | `F` | Zoom to fit |
@@ -222,6 +225,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 | IndexedDB | database `mvmap`, object store `maps`, keyed on `id` |
 | localStorage fallback | `mvmap:docs` — all documents, keyed by id |
 | localStorage | `mvmap:last` — id of the last-opened map, restored on load |
+| localStorage | `mvmap:rclick` — right-click behaviour, `remove` or `pan` |
 
 ---
 

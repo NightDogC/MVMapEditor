@@ -293,6 +293,9 @@
         display: grid;
         grid-template-columns: repeat(8, 1fr);
         gap: 3px;
+        max-height: 148px;
+        overflow-y: auto;
+        padding-right: 2px;
       }
       .emoji-grid button {
         background: var(--bg-3);
@@ -311,6 +314,13 @@
         text-align: center;
         flex: none;
         font-size: 12px;
+      }
+      .rclick-row {
+        padding: 5px 2px 1px;
+      }
+      .rclick-row select {
+        flex: 1;
+        min-width: 0;
       }
       .tools-sep {
         grid-column: 1 / -1;
@@ -894,6 +904,12 @@
           <label class="check"><input type="checkbox" id="chk-labels" checked /><span>Show room names</span></label>
           <label class="check"><input type="checkbox" id="chk-structs" checked /><span>Show structures</span></label>
           <label class="check"><input type="checkbox" id="chk-slabels" checked /><span>Show structure names</span></label>
+          <label class="inline rclick-row" title="What the right mouse button does on the map and in grey-box">Right-click
+            <select id="sel-rclick">
+              <option value="remove">Remove</option>
+              <option value="pan">Hold &amp; drag to pan</option>
+            </select>
+          </label>
         </section>
       </aside>
 
@@ -1032,7 +1048,22 @@
           "⭐", "💎", "❤️", "🗝️", "💀", "👾", "🔥", "💧",
           "⚡", "🌀", "🪜", "📦", "🧱", "⚙️", "🔒", "🚪",
           "💾", "🛏️", "🛒", "👑", "🏁", "❓", "❗", "🕳️",
+          "❄️", "💥", "💨", "💦", "⛔", "🚫", "☢️", "⚠️",
+          "❌", "⭕", "‼️", "⁉️", "🍔", "🎁", "💰", "🏆",
+          "🩸", "💊", "🛡️", "💣", "⚔️", "😈", "🎲", "🪄",
+          "🎵", "🪽", "✈️", "🛗", "🛖", "📖", "🎞️", "👤",
+          "🎯", "🏞️", "➡️", "⬅️", "⬆️", "⬇️", "☯️", "🐍",
         ];
+        const graphemes = (str) =>
+          typeof Intl !== "undefined" && Intl.Segmenter
+            ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(str), (g) => g.segment)
+            : Array.from(str);
+        const isEmoji = (g) => /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u.test(g);
+        /** The single emoji to keep from a text field's value: the most recently typed one, or null. */
+        function pickEmoji(str) {
+          const gs = graphemes(str || "").filter(isEmoji);
+          return gs.length ? gs[gs.length - 1] : null;
+        }
         const BOX_TYPES = [
           { id: "solid", name: "Solid", color: "#7c879b" },
           { id: "platform", name: "Platform", color: "#3fb27f" },
@@ -1120,7 +1151,7 @@
           d.stamps.forEach((s) => {
             s.cells = Array.isArray(s.cells) ? s.cells : [];
             if (typeof s.notes !== "string") s.notes = "";
-            if (!s.emoji) s.emoji = STAMP_EMOJI[0];
+            s.emoji = pickEmoji(String(s.emoji || "")) || STAMP_EMOJI[0];
           });
           d.edgeStructs.forEach((s) => {
             s.edges = Array.isArray(s.edges) ? s.edges : [];
@@ -1146,6 +1177,7 @@
           showLabels: true,
           showStructs: true,
           showStructLabels: true,
+          rclick: "remove", // right mouse button: "remove" (like Alt) | "pan" (hold and drag)
           hoverCell: null,
           hoverEdge: null,
           drag: null,
@@ -2550,17 +2582,31 @@
         }
 
         worldCanvas.addEventListener("pointerdown", (e) => {
-          if (e.button === 1 || S.spaceDown || S.tool === "pan") {
+          const rmb = e.button === 2;
+          if (e.button === 1 || S.spaceDown || S.tool === "pan" || (rmb && S.rclick === "pan")) {
             e.preventDefault();
             worldCanvas.setPointerCapture(e.pointerId);
             S.drag = { type: "pan", last: evPos(e) };
             return;
           }
-          if (e.button === 2) return;
+          if (e.button > 2) return;
           worldCanvas.setPointerCapture(e.pointerId);
           const V = makeView(S.cam, VW, VH);
           const p = evPos(e);
           const c = cellAtEvent(V, p);
+          // right-click in "remove" mode behaves like holding Alt with the current tool
+          const alt = e.altKey || rmb;
+          const shift = e.shiftKey && !rmb;
+
+          if (rmb && S.tool === "select") {
+            removeAt(V, p);
+            return;
+          }
+          if (rmb && S.tool === "key") {
+            const victim = S.doc.keys.filter((k) => k.x === c.x && k.y === c.y).pop();
+            if (victim) { pushUndo(); deleteKey(victim.id); commit(); }
+            return;
+          }
 
           if (S.tool === "select") {
             const hit = pickAt(V, p);
@@ -2587,16 +2633,16 @@
           }
 
           if (S.tool === "spaint" || S.tool === "srect") {
-            let st = e.altKey ? null : activeStruct();
+            let st = alt ? null : activeStruct();
             pushUndo();
-            if (!e.altKey && (e.shiftKey || !st)) {
+            if (!alt && (shift || !st)) {
               st = createStruct();
               S.sel = { type: "struct", id: st.id };
             }
             if (S.tool === "srect") {
-              S.drag = { type: "rect", layer: "struct", a: c, b: c, st, erase: e.altKey };
+              S.drag = { type: "rect", layer: "struct", a: c, b: c, st, erase: alt };
             } else {
-              S.drag = { type: "paint", layer: "struct", st, erase: e.altKey, seen: new Set() };
+              S.drag = { type: "paint", layer: "struct", st, erase: alt, seen: new Set() };
               applyPaint(c);
             }
             commit();
@@ -2613,21 +2659,21 @@
 
           if (S.tool === "stamp") {
             const k = ck(c.x, c.y);
-            if (e.altKey) {
+            if (alt) {
               if (stampIndex.has(k)) { pushUndo(); eraseStampCell(k); commit(); }
               return;
             }
             let st = activeStamp();
             const here = stampIndex.get(k);
             // plain click on an existing stamp selects it instead of stacking a duplicate
-            if (here && !e.shiftKey && (!st || here === st.id)) {
+            if (here && !shift && (!st || here === st.id)) {
               S.sel = { type: "stamp", id: here, cell: k };
               S.activeStampId = here;
               commit(true);
               return;
             }
             pushUndo();
-            if (e.shiftKey || !st) st = createStamp();
+            if (shift || !st) st = createStamp();
             setStampCell(k, st);
             S.sel = { type: "stamp", id: st.id, cell: k };
             commit();
@@ -2637,22 +2683,22 @@
           if (S.tool === "edge") {
             const wx = V.wx(p.x), wy = V.wy(p.y);
             const v = vertexAt(wx, wy);
-            S.drag = { type: "edgeline", a: v, b: v, cur: { x: wx, y: wy }, erase: e.altKey, fresh: e.shiftKey };
+            S.drag = { type: "edgeline", a: v, b: v, cur: { x: wx, y: wy }, erase: alt, fresh: shift };
             needsDraw = true;
             return;
           }
 
           if (S.tool === "paint" || S.tool === "rect") {
             let room = activeRoom();
-            if (e.shiftKey || !room) {
+            if (!alt && (shift || !room)) {
               pushUndo();
               room = createRoom();
               S.sel = { type: "room", id: room.id };
             } else pushUndo();
             if (S.tool === "rect") {
-              S.drag = { type: "rect", a: c, b: c, room, erase: e.altKey };
+              S.drag = { type: "rect", a: c, b: c, room, erase: alt };
             } else {
-              S.drag = { type: "paint", room, erase: e.altKey, seen: new Set() };
+              S.drag = { type: "paint", room, erase: alt, seen: new Set() };
               applyPaint(c);
             }
             commit();
@@ -2673,9 +2719,9 @@
             const existing = doorAtEdge(edge.o, edge.x, edge.y);
             pushUndo();
             if (existing) {
-              if (e.altKey) deleteDoor(existing.id);
+              if (alt) deleteDoor(existing.id);
               else S.sel = { type: "door", id: existing.id };
-            } else if (!e.altKey) {
+            } else if (!alt) {
               const d = { id: uid("door"), x: edge.x, y: edge.y, o: edge.o, kind: "door", dir: 1, lockId: null };
               S.doc.doors.push(d);
               S.sel = { type: "door", id: d.id };
@@ -2692,6 +2738,32 @@
             return;
           }
         });
+
+        /** Right-click remove with the Select tool: delete the smallest thing under the pointer. */
+        function removeAt(V, p) {
+          const hit = pickAt(V, p);
+          if (!hit) return;
+          const c = cellAtEvent(V, p);
+          pushUndo();
+          if (hit.type === "stamp") eraseStampCell(hit.cell);
+          else if (hit.type === "key") deleteKey(hit.id);
+          else if (hit.type === "door") deleteDoor(hit.id);
+          else if (hit.type === "edge") {
+            const e = nearestEdge(V.wx(p.x), V.wy(p.y), 0.16);
+            if (e) clearEdge(ek(e.o, e.x, e.y));
+            dropEmptyEdgeStructs();
+          } else if (hit.type === "struct") {
+            eraseStructCell(ck(c.x, c.y));
+            dropEmptyStructs();
+          } else if (hit.type === "room") {
+            eraseCell(c.x, c.y);
+            dropEmptyRooms();
+            reindex();
+            pruneDoors();
+          }
+          if (S.sel && !selExists(S.sel)) S.sel = null;
+          commit();
+        }
 
         function applyPaint(c) {
           const d = S.drag;
@@ -3417,7 +3489,7 @@
             <div class="insp-title"><span class="emo">${esc(st.emoji)}</span><span class="kind">Stamp</span></div>
             <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(st.name)}" placeholder="Save point, boss, chest…" /></div>
             <div class="fld"><label>Emoji</label>
-              <input type="text" id="i-emoji" value="${esc(st.emoji)}" placeholder="Type or paste (Win + .)" />
+              <input type="text" id="i-emoji" value="${esc(st.emoji)}" placeholder="One emoji (Win + .)" autocomplete="off" spellcheck="false" />
               <div class="emoji-grid" style="margin-top:4px">${STAMP_EMOJI.map(
                 (e) => `<button data-emoji="${esc(e)}" class="${e === st.emoji ? "on" : ""}">${e}</button>`
               ).join("")}</div>
@@ -3437,14 +3509,24 @@
 
           $("#i-name").oninput = (e) => { st.name = e.target.value; needsDraw = true; renderStamps(); scheduleSave(); };
           $("#i-notes").oninput = (e) => { st.notes = e.target.value; scheduleSave(); };
-          $("#i-emoji").oninput = (e) => {
-            const v = e.target.value.trim();
-            if (!v) return;
-            st.emoji = v;
+          // exactly one emoji: typing or pasting replaces the current one, anything else is dropped
+          const emo = $("#i-emoji");
+          emo.addEventListener("focus", () => emo.select());
+          const takeEmoji = () => {
+            const g = pickEmoji(emo.value);
+            if (g) st.emoji = g;
+            if (emo.value !== st.emoji) emo.value = st.emoji;
+            emo.select();
+            const t = host.querySelector(".insp-title .emo");
+            if (t) t.textContent = st.emoji;
+            host.querySelectorAll("[data-emoji]").forEach((b) => b.classList.toggle("on", b.dataset.emoji === st.emoji));
             needsDraw = true;
             renderStamps();
             scheduleSave();
           };
+          emo.oninput = (e) => { if (!e.isComposing) takeEmoji(); };
+          emo.addEventListener("compositionend", takeEmoji);
+          emo.addEventListener("blur", () => { if (emo.value !== st.emoji) emo.value = st.emoji; });
           undoOnFocus($("#i-name"), $("#i-notes"), $("#i-emoji"), $("#i-ccolor"));
           host.querySelectorAll("[data-emoji]").forEach((b) => {
             b.onclick = () => { pushUndo(); st.emoji = b.dataset.emoji; commit(); };
@@ -3600,6 +3682,11 @@
         };
         $("#chk-structs").onchange = (e) => { S.showStructs = e.target.checked; needsDraw = true; };
         $("#chk-slabels").onchange = (e) => { S.showStructLabels = e.target.checked; needsDraw = true; };
+        // a per-browser preference, not part of the map document
+        $("#sel-rclick").onchange = (e) => {
+          S.rclick = e.target.value === "pan" ? "pan" : "remove";
+          try { localStorage.setItem("mvmap:rclick", S.rclick); } catch (err) {}
+        };
 
         /** Open a fresh, empty room in `areaId` and arm the Paint tool on it. */
         function startNewRoom(areaId) {
@@ -3927,20 +4014,21 @@
           const s = dSubAt(V, p);
           const det = detailData(S.detailRoomId);
 
-          if (e.button === 1 || S.spaceDown || S.dtool === "pan") {
+          const rmb = e.button === 2;
+          if (e.button === 1 || S.spaceDown || S.dtool === "pan" || (rmb && S.rclick === "pan")) {
             dCanvas.setPointerCapture(e.pointerId);
             S.ddrag = { type: "pan", last: p };
             return;
           }
-          if (e.button === 2) return;
+          if (e.button > 2) return;
           dCanvas.setPointerCapture(e.pointerId);
 
-          if (S.dtool === "box") {
+          if (S.dtool === "box" && !rmb) {
             S.ddrag = { type: "box", a: s, b: s };
             needsDraw = true;
             return;
           }
-          if (S.dtool === "erase") {
+          if (S.dtool === "erase" || rmb) {
             const b = boxAt(det, s.x, s.y);
             if (b) {
               pushUndo();
@@ -4209,9 +4297,15 @@
             <h3>Stamps</h3>
             <p>A <b>stamp</b> drops one emoji onto a single cell, on the very top layer — save points, items,
                bosses, shops. Like structures, each stamp has a name, colour and notes, and you can keep many of
-               them; pick the emoji from the inspector's palette or type any emoji. Click with the <b>Stamp</b> tool
+               them; pick the emoji from the inspector's palette or type one — the field holds exactly one emoji. Click with the <b>Stamp</b> tool
                to place the active one, <b>Shift</b>-click to start a new stamp, <b>Alt</b>-click to remove one.
                Drag a placed stamp with <b>Select</b> to move just that cell.</p>
+            <h3>Right-click</h3>
+            <p>Choose what the right mouse button does under <b>Right-click</b> at the bottom of the left panel.
+               <b>Remove</b> works like holding <b>Alt</b> with the current tool — erase cells, clear structure
+               cells or edges, delete a door, key or stamp; with <b>Select</b> it removes the smallest thing under
+               the pointer, and in grey-box it erases boxes. <b>Hold &amp; drag to pan</b> turns it into a pan
+               button instead. The choice is remembered in this browser.</p>
             <h3>Names &amp; order</h3>
             <p>Every inspector has <b>Show name on map</b> to hide one object's label, and <b>Order</b> buttons
                to move the selection up or down its list (rooms reorder within their area). Lists draw in order,
@@ -4239,6 +4333,7 @@
               <b>M</b><span>Emoji stamp</span>
               <b>Shift + paint</b><span>Start a new room / structure</span>
               <b>Alt + paint</b><span>Erase instead</span>
+              <b>Right-click</b><span>Remove, or drag to pan (configurable)</span>
               <b>F</b><span>Zoom to fit</span>
               <b>Enter</b><span>Grey-box selected room</span>
               <b>Del</b><span>Delete selection</span>
@@ -4319,6 +4414,8 @@
           $("#chk-labels").checked = S.showLabels;
           $("#chk-structs").checked = S.showStructs;
           $("#chk-slabels").checked = S.showStructLabels;
+          try { if (localStorage.getItem("mvmap:rclick") === "pan") S.rclick = "pan"; } catch (e) {}
+          $("#sel-rclick").value = S.rclick;
           setTool("paint");
           setDTool("box");
           renderTypePalette();
