@@ -79,6 +79,8 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 ### Map
 
+The tool keys below are the defaults. Rebind any left-panel tool under **? → Tool shortcuts**: click a key and press the new one; taking a key another tool already uses swaps the two. Modifier combinations and the reserved keys (`Space`, `F`, `Enter`, `Esc`, `Del`, `Backspace`, `[`, `]`, `Tab`) can't be bound, and holding `Space` always pans. **Export** / **Import** there save and load a `mvmap-shortcuts.json`; **Reset to defaults** restores the table below. Custom keys are stored per browser in `mvmap:keys`.
+
 | Key | Action |
 |---|---|
 | `V` | Select / move |
@@ -226,6 +228,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 | localStorage fallback | `mvmap:docs` — all documents, keyed by id |
 | localStorage | `mvmap:last` — id of the last-opened map, restored on load |
 | localStorage | `mvmap:rclick` — right-click behaviour, `remove` or `pan` |
+| localStorage | `mvmap:keys` — custom tool shortcuts, `{ "toolId": "key", … }` |
 
 ---
 

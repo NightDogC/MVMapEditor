@@ -753,6 +753,48 @@
         font-size: 12px;
         color: var(--tx-dim);
       }
+      .keymap {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 14px;
+      }
+      .keymap .km-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--tx-dim);
+      }
+      .keymap .km-row span {
+        flex: 1;
+      }
+      .keycap {
+        min-width: 30px;
+        font: 11px var(--mono);
+        color: var(--tx);
+        background: var(--bg-3);
+        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        padding: 2px 7px;
+      }
+      .keycap:hover {
+        border-color: var(--acc-2);
+      }
+      .keycap.wait {
+        background: #21344a;
+        border-color: var(--acc);
+        color: #cfe6ff;
+      }
+      .keycap.flash {
+        border-color: var(--ok);
+      }
+      .km-msg {
+        min-height: 18px;
+        margin-top: 6px;
+      }
+      .km-msg.err {
+        color: #e0a13a;
+      }
       .kbd-grid b {
         font: 11px var(--mono);
         color: var(--tx);
@@ -984,6 +1026,7 @@
       Running from <code>file://</code> — using localStorage instead of IndexedDB. Export often.
     </div>
     <input type="file" id="file-input" accept="application/json,.json" hidden />
+    <input type="file" id="keys-input" accept="application/json,.json" hidden />
 
     <script>
       "use strict";
@@ -1091,6 +1134,38 @@
           serase: "Drag over cells to remove structure cells — rooms underneath are untouched",
           stamp: "Click a cell to drop the active emoji stamp · <kbd>Alt</kbd>-click removes · <kbd>Shift</kbd> starts a new stamp",
           edge: "Drag along grid lines to draw an edge structure · click an edge to add or select · <kbd>Alt</kbd> removes · <kbd>Shift</kbd> starts a new one",
+        };
+
+        /** Tools on the left panel, in panel order — their shortcuts are user-configurable. */
+        const TOOL_LIST = [
+          { id: "select", name: "Select / move" },
+          { id: "paint", name: "Paint cells" },
+          { id: "rect", name: "Rectangle fill" },
+          { id: "erase", name: "Erase cells" },
+          { id: "door", name: "Door" },
+          { id: "key", name: "Key" },
+          { id: "pan", name: "Pan" },
+          { id: "spaint", name: "Structure paint" },
+          { id: "srect", name: "Structure rectangle" },
+          { id: "serase", name: "Structure erase" },
+          { id: "edge", name: "Edge structure" },
+          { id: "stamp", name: "Emoji stamp" },
+        ];
+        const DEFAULT_TOOL_KEYS = {
+          select: "v", paint: "b", rect: "r", erase: "e", door: "d", key: "k", pan: "h",
+          spaint: "s", srect: "t", serase: "x", edge: "p", stamp: "m",
+        };
+        /** Keys the map view already uses for something else; a tool can't take them. */
+        const RESERVED_KEYS = {
+          " ": "Space — hold to pan",
+          f: "F — zoom to fit",
+          enter: "Enter — grey-box the selected room",
+          escape: "Esc — deselect",
+          delete: "Del — delete selection",
+          backspace: "Backspace — delete selection",
+          "[": "[ — move selection up",
+          "]": "] — move selection down",
+          tab: "Tab — keyboard focus",
         };
 
         /* ══════════════════════════════════════════════════════════════
@@ -2940,10 +3015,71 @@
         /* ══════════════════════════════════════════════════════════════
            12 · Keyboard
            ══════════════════════════════════════════════════════════════ */
-        const TOOL_KEYS = {
-          v: "select", b: "paint", r: "rect", e: "erase", d: "door", k: "key", h: "pan",
-          s: "spaint", t: "srect", x: "serase", p: "edge", m: "stamp",
-        };
+        /* ── Configurable tool shortcuts (stored per browser) ──────── */
+        let toolKeys = Object.assign({}, DEFAULT_TOOL_KEYS); // tool -> key
+        let TOOL_KEYS = {}; // key -> tool
+        const KEYS_LS = "mvmap:keys";
+        /** A keydown's key as stored in the keymap: one lower-cased printable character, or a named key. */
+        const normKey = (k) => (k && Array.from(k).length === 1 ? k.toLowerCase() : String(k || "").toLowerCase());
+        const keyLabel = (k) =>
+          k === " " ? "Space" : Array.from(k).length === 1 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1);
+        const toolName = (id) => (TOOL_LIST.find((t) => t.id === id) || { name: id }).name;
+
+        /** Why `k` can't be a tool shortcut, or null when it can. */
+        function keyProblem(k) {
+          if (!k) return "That isn't a key.";
+          if (RESERVED_KEYS[k]) return `${keyLabel(k)} is reserved (${RESERVED_KEYS[k]}).`;
+          if (Array.from(k).length !== 1 || /\s/.test(k)) return `${keyLabel(k)} can't be used — pick a letter, digit or symbol key.`;
+          return null;
+        }
+        /** Validate a full tool -> key map; returns an error message or null. */
+        function keymapProblem(map) {
+          const seen = {};
+          for (const t of TOOL_LIST) {
+            const k = map[t.id];
+            if (typeof k !== "string") return `No key for ${t.name}.`;
+            const bad = keyProblem(k);
+            if (bad) return `${t.name}: ${bad}`;
+            if (seen[k]) return `${keyLabel(k)} is assigned to both ${toolName(seen[k])} and ${t.name}.`;
+            seen[k] = t.id;
+          }
+          return null;
+        }
+        function applyToolKeys(map) {
+          toolKeys = {};
+          TOOL_KEYS = {};
+          for (const t of TOOL_LIST) {
+            toolKeys[t.id] = map[t.id];
+            TOOL_KEYS[map[t.id]] = t.id;
+          }
+          document.querySelectorAll("#tools [data-tool]").forEach((b) => {
+            const k = toolKeys[b.dataset.tool];
+            const kb = b.querySelector(".kb");
+            if (kb) kb.textContent = keyLabel(k);
+            b.title = `${toolName(b.dataset.tool)} (${keyLabel(k)})${b.dataset.tool === "pan" ? " · or hold Space" : ""}`;
+          });
+        }
+        function saveToolKeys() {
+          try { localStorage.setItem(KEYS_LS, JSON.stringify(toolKeys)); } catch (e) {}
+        }
+        /** Read a stored or imported keymap: missing tools fall back to defaults, keys are normalised. */
+        function readKeymap(obj) {
+          const src = obj && typeof obj === "object" ? obj.keys && typeof obj.keys === "object" ? obj.keys : obj : {};
+          const map = Object.assign({}, DEFAULT_TOOL_KEYS);
+          for (const t of TOOL_LIST) if (typeof src[t.id] === "string") map[t.id] = normKey(src[t.id]);
+          return map;
+        }
+        function loadToolKeys() {
+          let map = DEFAULT_TOOL_KEYS;
+          try {
+            const raw = localStorage.getItem(KEYS_LS);
+            if (raw) {
+              const m = readKeymap(JSON.parse(raw));
+              if (!keymapProblem(m)) map = m;
+            }
+          } catch (e) {}
+          applyToolKeys(map);
+        }
 
         window.addEventListener("keydown", (e) => {
           const t = e.target;
@@ -4263,7 +4399,10 @@
           $("#modal-box").innerHTML = html;
           $("#modal").hidden = false;
         }
-        function closeModal() { $("#modal").hidden = true; }
+        function closeModal() {
+          $("#modal").hidden = true;
+          rebinding = null;
+        }
         $("#modal").addEventListener("click", (e) => {
           if (e.target.id === "modal" || e.target.dataset.close != null) closeModal();
         });
@@ -4317,20 +4456,21 @@
             <h3>Storage</h3>
             <p>Maps autosave to your browser (IndexedDB, or localStorage when that isn't available). Use
                <b>Export</b> for a portable <code>.json</code> file and <b>PNG</b> for an image of the whole map.</p>
+            <h3>Tool shortcuts</h3>
+            <p>Click a key, then press the new one. Taking a key another tool already uses swaps the two.
+               Modifier combinations and the reserved keys — Space, F, Enter, Esc, Del, Backspace, [ ] and Tab —
+               can't be bound. Holding <b>Space</b> always pans. Shortcuts are saved in this browser; use
+               Export / Import to move them to another one.</p>
+            <div class="keymap" id="keymap"></div>
+            <div class="meta km-msg" id="km-msg"></div>
+            <div class="btn-row" style="margin-top:4px">
+              <button class="btn" id="km-import">Import…</button>
+              <button class="btn" id="km-export">Export</button>
+              <button class="btn" id="km-reset">Reset to defaults</button>
+            </div>
             <h3>Map shortcuts</h3>
             <div class="kbd-grid">
-              <b>V</b><span>Select / move</span>
-              <b>B</b><span>Paint cells</span>
-              <b>R</b><span>Rectangle fill</span>
-              <b>E</b><span>Erase cells</span>
-              <b>D</b><span>Door</span>
-              <b>K</b><span>Key</span>
-              <b>H / Space</b><span>Pan</span>
-              <b>S</b><span>Structure paint</span>
-              <b>T</b><span>Structure rectangle</span>
-              <b>X</b><span>Structure erase</span>
-              <b>P</b><span>Edge structure (drag along grid lines)</span>
-              <b>M</b><span>Emoji stamp</span>
+              <b>Space (hold)</b><span>Pan</span>
               <b>Shift + paint</b><span>Start a new room / structure</span>
               <b>Alt + paint</b><span>Erase instead</span>
               <b>Right-click</b><span>Remove, or drag to pan (configurable)</span>
@@ -4351,6 +4491,112 @@
               <b>Esc</b><span>Deselect, then back to map</span>
             </div>
             <div class="close-row"><button class="btn primary" data-close style="flex:0 0 auto;padding:6px 16px">Close</button></div>`);
+          renderKeymap();
+          $("#km-export").onclick = exportKeymap;
+          $("#km-import").onclick = () => $("#keys-input").click();
+          $("#km-reset").onclick = () => {
+            rebinding = null;
+            applyToolKeys(DEFAULT_TOOL_KEYS);
+            saveToolKeys();
+            renderKeymap("Shortcuts reset to defaults.");
+          };
+        };
+
+        /* ── Keymap editor (inside the help modal) ─────────────────── */
+        let rebinding = null; // tool id waiting for its new key
+        function renderKeymap(msg, isErr) {
+          const host = $("#keymap");
+          if (!host) return;
+          host.innerHTML = TOOL_LIST.map(
+            (t) => `<div class="km-row"><span>${esc(t.name)}${t.id === "pan" ? " <span class=\"sub\">(+ hold Space)</span>" : ""}</span>
+                <button class="keycap ${rebinding === t.id ? "wait" : ""}" data-rebind="${t.id}">${
+                  rebinding === t.id ? "press a key…" : esc(keyLabel(toolKeys[t.id]))
+                }</button></div>`
+          ).join("");
+          host.querySelectorAll("[data-rebind]").forEach((b) => {
+            b.onclick = () => {
+              rebinding = rebinding === b.dataset.rebind ? null : b.dataset.rebind;
+              renderKeymap(rebinding ? `Press the new key for ${toolName(rebinding)} — Esc cancels.` : "");
+              // keep Space/Enter from re-clicking the button while it waits for a key
+              if (document.activeElement) document.activeElement.blur();
+            };
+          });
+          const m = $("#km-msg");
+          if (m && msg !== undefined) {
+            m.textContent = msg;
+            m.classList.toggle("err", !!isErr);
+          }
+        }
+        // capture phase, so a key being bound never reaches the editor's own shortcuts
+        window.addEventListener(
+          "keydown",
+          (e) => {
+            if (!rebinding || $("#modal").hidden) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (["Shift", "Control", "Alt", "Meta", "CapsLock", "AltGraph"].includes(e.key)) return;
+            if (e.key === "Escape") {
+              rebinding = null;
+              renderKeymap("Cancelled.");
+              return;
+            }
+            if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
+              renderKeymap("Modifier combinations aren't supported — press a single key.", true);
+              return;
+            }
+            const k = normKey(e.key);
+            const bad = keyProblem(k);
+            if (bad) {
+              renderKeymap(bad + " Try another key, or Esc to cancel.", true);
+              return;
+            }
+            const tool = rebinding;
+            const old = toolKeys[tool];
+            const other = TOOL_KEYS[k];
+            const next = Object.assign({}, toolKeys, { [tool]: k });
+            let msg = `${toolName(tool)} is now ${keyLabel(k)}.`;
+            if (other && other !== tool) {
+              next[other] = old;
+              msg = `${toolName(tool)} is now ${keyLabel(k)}; ${toolName(other)} took ${keyLabel(old)} (swapped).`;
+            }
+            rebinding = null;
+            applyToolKeys(next);
+            saveToolKeys();
+            renderKeymap(msg);
+            const cap = $(`#keymap [data-rebind="${tool}"]`);
+            if (cap) cap.classList.add("flash");
+          },
+          true
+        );
+        function exportKeymap() {
+          const out = { type: "mvmap-shortcuts", version: 1, keys: toolKeys };
+          saveBlob(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }), "mvmap-shortcuts.json");
+          renderKeymap("Exported mvmap-shortcuts.json.");
+        }
+        $("#keys-input").onchange = (e) => {
+          const f = e.target.files && e.target.files[0];
+          e.target.value = "";
+          if (!f) return;
+          const rd = new FileReader();
+          rd.onload = () => {
+            let map;
+            try {
+              map = readKeymap(JSON.parse(rd.result));
+            } catch (err) {
+              renderKeymap("Could not read that file: " + err.message, true);
+              return;
+            }
+            const bad = keymapProblem(map);
+            if (bad) {
+              renderKeymap("Not imported — " + bad, true);
+              return;
+            }
+            rebinding = null;
+            applyToolKeys(map);
+            saveToolKeys();
+            renderKeymap("Shortcuts imported from " + f.name + ".");
+          };
+          rd.readAsText(f);
         };
 
         $("#btn-maps").onclick = async () => {
@@ -4416,6 +4662,7 @@
           $("#chk-slabels").checked = S.showStructLabels;
           try { if (localStorage.getItem("mvmap:rclick") === "pan") S.rclick = "pan"; } catch (e) {}
           $("#sel-rclick").value = S.rclick;
+          loadToolKeys();
           setTool("paint");
           setDTool("box");
           renderTypePalette();
