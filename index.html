@@ -2583,7 +2583,7 @@
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           const fs = clamp(Math.round(9.5 * Math.min(1.3, z)), 8, 12);
-          const placed = [];
+          const labels = [];
           for (const st of S.doc.stamps) {
             const col = structColor(st);
             const isSel = st.id === selId;
@@ -2606,20 +2606,26 @@
                 ctx.fillStyle = "#ffffff";
                 ctx.fillText(st.emoji, cx, cy + s * 0.04);
               }
-              if (showNames && !st.hideName && st.name) {
-                ctx.font = `500 ${fs}px ${FONTF}`;
-                const tw = ctx.measureText(st.name).width;
-                const box = { x: cx - tw / 2 - 3, y: py + s + 1, w: tw + 6, h: fs + 3 };
-                // neighbouring stamps would stack their labels on top of each other — first one wins
-                if (!placed.some((b) => box.x < b.x + b.w && b.x < box.x + box.w && box.y < b.y + b.h && b.y < box.y + box.h)) {
-                  placed.push(box);
-                  ctx.fillStyle = "rgba(10,12,16,0.72)";
-                  ctx.fillRect(box.x, box.y, box.w, box.h);
-                  ctx.fillStyle = shade(col, 0.3);
-                  ctx.fillText(st.name, cx, py + s + 1 + fs / 2 + 1.5);
-                }
-              }
+              if (showNames && !st.hideName && st.name) labels.push({ text: st.name, col, cx, top: py, bottom: py + s });
             }
+          }
+
+          // labels go on after every tile, so a tile drawn later can't cover one
+          ctx.font = `500 ${fs}px ${FONTF}`;
+          const placed = [];
+          const hits = (box) => placed.some((b) => box.x < b.x + b.w && b.x < box.x + box.w && box.y < b.y + b.h && b.y < box.y + box.h);
+          for (const l of labels) {
+            const w = ctx.measureText(l.text).width + 6, h = fs + 3;
+            // below the stamp first; if a neighbour's label is in the way try above; failing both, hide it
+            const below = { x: l.cx - w / 2, y: l.bottom + 1, w, h };
+            const above = { x: l.cx - w / 2, y: l.top - h - 1, w, h };
+            const box = !hits(below) ? below : !hits(above) ? above : null;
+            if (!box) continue;
+            placed.push(box);
+            ctx.fillStyle = "rgba(10,12,16,0.72)";
+            ctx.fillRect(box.x, box.y, box.w, box.h);
+            ctx.fillStyle = shade(l.col, 0.3);
+            ctx.fillText(l.text, l.cx, box.y + h / 2 + 0.5);
           }
           ctx.restore();
         }
