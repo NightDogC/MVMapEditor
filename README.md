@@ -63,6 +63,8 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
 
+**Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
+
 **Right-click** — configurable at the bottom of the left panel. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
 **Names & order** — every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
@@ -94,6 +96,7 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `X` | Structure erase |
 | `P` | Edge structure (drag along grid lines) |
 | `M` | Emoji stamp |
+| `N` | Note |
 | `[` / `]` | Move selection up / down its list |
 | `Shift` + `[` / `]` | Move selection to top / bottom |
 | `H` or hold `Space` | Pan |
@@ -103,7 +106,7 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `Alt` + paint | Erase instead |
 | `Alt` + click door | Delete door |
 | `F` | Zoom to fit |
-| `Enter` | Grey-box selected room |
+| `Enter` | Grey-box selected room · expand / collapse selected note |
 | `Del` | Delete selection |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Export JSON |
@@ -192,6 +195,11 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
       "notes": "", "cells": ["6,4"] }
   ],
 
+  "notes": [
+    { "id": "note_n1", "name": "Boss door", "text": "Opens after the Grapple fight.\nCheck the softlock.",
+      "color": "#f0dc3a", "x": 5, "y": 4, "expanded": false }
+  ],
+
   "edgeStructs": [
     { "id": "edge_e1", "name": "Ledge", "color": "#f0a13a",
       "notes": "", "edges": ["h:3,5", "h:4,5"] }   // "o:x,y", same convention as doors
@@ -212,7 +220,9 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
 **Stamp cells** are `"x,y"` keys on their own layer; each cell holds at most one stamp.
 
-**`hideName: true`** may appear on rooms, structures, edge structures, stamps and keys to hide that object's label on the map. When absent the name is shown.
+**Notes** sit on cell `(x, y)` in world grid coordinates, at most one per cell. `expanded` is saved with the map, so an open note stays open.
+
+**`hideName: true`** may appear on rooms, structures, edge structures, stamps, notes and keys to hide that object's label on the map. When absent the name is shown.
 
 **Edge-structure edges** are `"o:x,y"` strings using the door edge convention above, e.g. `"h:3,5"`. Each edge belongs to at most one edge structure.
 

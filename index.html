@@ -322,6 +322,9 @@
         flex: 1;
         min-width: 0;
       }
+      #i-ntext {
+        min-height: 110px;
+      }
       .tools-sep {
         grid-column: 1 / -1;
         margin-top: 4px;
@@ -895,6 +898,7 @@
           <button class="tool" data-tool="serase" title="Structure erase (X)"><span class="glyph">⌫</span><span>S-Erase</span><span class="kb">X</span></button>
           <button class="tool" data-tool="edge" title="Edge structure (P)"><span class="glyph">━</span><span>Edge</span><span class="kb">P</span></button>
           <button class="tool" data-tool="stamp" title="Emoji stamp (M)"><span class="glyph">☺</span><span>Stamp</span><span class="kb">M</span></button>
+          <button class="tool" data-tool="note" title="Note (N)"><span class="glyph">✎</span><span>Note</span><span class="kb">N</span></button>
         </div>
 
         <section class="sect">
@@ -946,6 +950,7 @@
           <label class="check"><input type="checkbox" id="chk-labels" checked /><span>Show room names</span></label>
           <label class="check"><input type="checkbox" id="chk-structs" checked /><span>Show structures</span></label>
           <label class="check"><input type="checkbox" id="chk-slabels" checked /><span>Show structure names</span></label>
+          <label class="check"><input type="checkbox" id="chk-notes" checked /><span>Show notes</span></label>
           <label class="inline rclick-row" title="What the right mouse button does on the map and in grey-box">Right-click
             <select id="sel-rclick">
               <option value="remove">Remove</option>
@@ -1087,6 +1092,8 @@
           "#b8c0cc", "#7c879b", "#c9885a", "#e0555f", "#f0a13a", "#f0dc3a",
           "#5ad07a", "#5fd8cf", "#5aa9f0", "#a97af0", "#ef6fb5", "#d84c7a",
         ];
+        const NOTE_COLORS = ["#f0dc3a", "#f0a13a", "#ef6fb5", "#5ad07a", "#5fd8cf", "#5aa9f0", "#a97af0", "#e6ecf6"];
+        const NOTE_BOX_W = 236; // expanded note width, in screen px at any zoom
         const STAMP_EMOJI = [
           "⭐", "💎", "❤️", "🗝️", "💀", "👾", "🔥", "💧",
           "⚡", "🌀", "🪜", "📦", "🧱", "⚙️", "🔒", "🚪",
@@ -1132,6 +1139,7 @@
           spaint: "Drag to paint cells into the active structure · <kbd>Alt</kbd> erases · <kbd>Shift</kbd> starts a new structure",
           srect: "Drag a rectangle to fill the active structure · <kbd>Alt</kbd> clears it · <kbd>Shift</kbd> starts a new structure",
           serase: "Drag over cells to remove structure cells — rooms underneath are untouched",
+          note: "Click a cell to add a note · click a note to select it · its <kbd>+</kbd> button expands it · <kbd>Alt</kbd>-click removes",
           stamp: "Click a cell to drop the active emoji stamp · <kbd>Alt</kbd>-click removes · <kbd>Shift</kbd> starts a new stamp",
           edge: "Drag along grid lines to draw an edge structure · click an edge to add or select · <kbd>Alt</kbd> removes · <kbd>Shift</kbd> starts a new one",
         };
@@ -1150,10 +1158,11 @@
           { id: "serase", name: "Structure erase" },
           { id: "edge", name: "Edge structure" },
           { id: "stamp", name: "Emoji stamp" },
+          { id: "note", name: "Note" },
         ];
         const DEFAULT_TOOL_KEYS = {
           select: "v", paint: "b", rect: "r", erase: "e", door: "d", key: "k", pan: "h",
-          spaint: "s", srect: "t", serase: "x", edge: "p", stamp: "m",
+          spaint: "s", srect: "t", serase: "x", edge: "p", stamp: "m", note: "n",
         };
         /** Keys the map view already uses for something else; a tool can't take them. */
         const RESERVED_KEYS = {
@@ -1181,6 +1190,7 @@
         // doc.structures[]  { id, name, color, notes, cells:["x,y",…] }   a layer drawn over rooms
         // doc.edgeStructs[] { id, name, color, notes, edges:["o:x,y",…] } same edge convention as doors
         // doc.stamps[]      { id, name, emoji, color, notes, cells:["x,y",…] } one emoji per cell, drawn on top
+        // doc.notes[]       { id, name, text, color, x, y, expanded } a standalone annotation on one cell, above stamps
         //   rooms/structures/edgeStructs/stamps/keys may carry hideName:true to hide their map label
         function newDoc(name) {
           const a = { id: uid("area"), name: "Area 1", color: AREA_COLORS[0] };
@@ -1198,6 +1208,7 @@
             structures: [],
             edgeStructs: [],
             stamps: [],
+            notes: [],
           };
         }
 
@@ -1221,6 +1232,13 @@
           d.structures.forEach((s) => {
             s.cells = Array.isArray(s.cells) ? s.cells : [];
             if (typeof s.notes !== "string") s.notes = "";
+          });
+          d.notes = (Array.isArray(d.notes) ? d.notes : []).filter((n) => n && Number.isFinite(n.x) && Number.isFinite(n.y));
+          d.notes.forEach((n) => {
+            if (typeof n.name !== "string") n.name = "Note";
+            if (typeof n.text !== "string") n.text = "";
+            if (!n.color) n.color = NOTE_COLORS[0];
+            n.expanded = !!n.expanded;
           });
           d.stamps = Array.isArray(d.stamps) ? d.stamps : [];
           d.stamps.forEach((s) => {
@@ -1252,6 +1270,7 @@
           showLabels: true,
           showStructs: true,
           showStructLabels: true,
+          showNotes: true,
           rclick: "remove", // right mouse button: "remove" (like Alt) | "pan" (hold and drag)
           hoverCell: null,
           hoverEdge: null,
@@ -1287,6 +1306,8 @@
           for (const s of S.doc.stamps) for (const c of s.cells) stampIndex.set(c, s.id);
         }
         const stampById = (id) => S.doc.stamps.find((s) => s.id === id) || null;
+        const noteById = (id) => S.doc.notes.find((n) => n.id === id) || null;
+        const noteAtCell = (x, y) => S.doc.notes.find((n) => n.x === x && n.y === y) || null;
         function activeStamp() {
           let s = stampById(S.activeStampId);
           if (!s && S.sel && S.sel.type === "stamp") s = stampById(S.sel.id);
@@ -1366,6 +1387,7 @@
           if (sel.type === "struct") return !!structById(sel.id);
           if (sel.type === "edge") return !!edgeStructById(sel.id);
           if (sel.type === "stamp") return !!stampById(sel.id);
+          if (sel.type === "note") return !!noteById(sel.id);
           return false;
         }
         function undo() {
@@ -1554,6 +1576,7 @@
           for (const k of S.doc.keys) grow(k.x, k.y);
           for (const s of S.doc.structures) for (const c of s.cells) { const [x, y] = unck(c); grow(x, y); }
           for (const s of S.doc.stamps) for (const c of s.cells) { const [x, y] = unck(c); grow(x, y); }
+          for (const n of S.doc.notes) grow(n.x, n.y);
           for (const s of S.doc.edgeStructs)
             for (const e of s.edges) {
               for (const [x, y] of edgeCells(unek(e))) grow(x, y);
@@ -1828,6 +1851,24 @@
           if (S.activeStampId === id) S.activeStampId = null;
           if (S.sel && S.sel.id === id) S.sel = null;
         }
+        /* ── Notes (standalone single-cell annotations) ────────────── */
+        function createNoteAt(x, y) {
+          const n = {
+            id: uid("note"),
+            name: "Note " + (S.doc.notes.length + 1),
+            text: "",
+            color: NOTE_COLORS[0],
+            x, y,
+            expanded: false,
+          };
+          S.doc.notes.push(n);
+          return n;
+        }
+        function deleteNote(id) {
+          S.doc.notes = S.doc.notes.filter((n) => n.id !== id);
+          if (S.sel && S.sel.id === id) S.sel = null;
+        }
+
         function shiftStampCells(pairs, dx, dy) {
           if (!pairs.length) return;
           const bySt = new Map();
@@ -1934,6 +1975,7 @@
           for (const st of S.doc.structures) for (const c of st.cells) if (owned.has(c)) movingSCells.push([st, c]);
           const movingEdges = [];
           for (const es of S.doc.edgeStructs) for (const k of es.edges) if (ownsEdge(unek(k))) movingEdges.push([es, k]);
+          const movingNotes = S.doc.notes.filter((n) => owned.has(ck(n.x, n.y)));
           const movingStamps = [];
           for (const st of S.doc.stamps) for (const c of st.cells) if (owned.has(c)) movingStamps.push([st, c]);
 
@@ -1956,6 +1998,11 @@
           shiftStructCells(movingSCells, dx, dy);
           shiftEdges(movingEdges, dx, dy);
           shiftStampCells(movingStamps, dx, dy);
+          // notes ride along; one already sitting at the destination gives way
+          const landing = new Set(movingNotes.map((n) => ck(n.x + dx, n.y + dy)));
+          const moving = new Set(movingNotes);
+          S.doc.notes = S.doc.notes.filter((n) => moving.has(n) || !landing.has(ck(n.x, n.y)));
+          movingNotes.forEach((n) => { n.x += dx; n.y += dy; });
           // shift greybox geometry with the room
           const det = S.doc.detail[room.id];
           if (det) det.boxes.forEach((b) => { b.x += dx * det.sub; b.y += dy * det.sub; });
@@ -2577,6 +2624,194 @@
           ctx.restore();
         }
 
+        /** Break `text` into lines no wider than `maxW` (ctx.font must be set); handles CJK and long words. */
+        function wrapLines(ctx, text, maxW, maxLines) {
+          const out = [];
+          for (const para of String(text).split("\n")) {
+            let line = "", lastSpace = -1;
+            for (const ch of Array.from(para)) {
+              const next = line + ch;
+              if (ctx.measureText(next).width <= maxW || !line) {
+                line = next;
+                if (/\s/.test(ch)) lastSpace = line.length;
+                continue;
+              }
+              if (lastSpace > 0 && !/\s/.test(ch)) {
+                out.push(line.slice(0, lastSpace).trimEnd());
+                line = line.slice(lastSpace) + ch;
+              } else {
+                out.push(line.trimEnd());
+                line = /\s/.test(ch) ? "" : ch;
+              }
+              lastSpace = -1;
+              if (out.length >= maxLines) break;
+            }
+            if (out.length >= maxLines) break;
+            out.push(line);
+          }
+          if (out.length > maxLines) out.length = maxLines;
+          return out;
+        }
+
+        /** Screen-space layout of a note: its marker, the expand button, and (when open) the text box. */
+        function noteGeom(ctx, V, n) {
+          const s = CELL * V.cam.zoom;
+          const px = V.sx(n.x * CELL), py = V.sy(n.y * CELL);
+          const pad = Math.max(1, s * 0.14);
+          const g = { s, px, py, marker: { x: px + pad, y: py + pad, w: s - pad * 2, h: s - pad * 2 } };
+          if (s >= 12) {
+            const r = clamp(s * 0.16, 5.5, 9);
+            g.btn = { cx: px + s - r * 0.35, cy: py + r * 0.35, r };
+          }
+          if (n.expanded) {
+            const W = NOTE_BOX_W, padX = 10, headH = 24, lh = 16;
+            ctx.font = `12px ${FONTF}`;
+            const body = n.text.trim() ? wrapLines(ctx, n.text, W - padX * 2, 40) : null;
+            const h = headH + (body ? body.length * lh : lh) + 10;
+            const box = { x: px + s + 8, y: py, w: W, h, headH, lh, padX, body };
+            box.btn = { cx: box.x + W - 13, cy: box.y + headH / 2, r: 8 };
+            g.box = box;
+          }
+          return g;
+        }
+        const inCircle = (c, x, y) => c && Math.hypot(x - c.cx, y - c.cy) <= c.r + 2;
+        const inRect = (r, x, y) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+
+        /** The note part under a screen point: expand/collapse button, open text box, or marker. */
+        function noteHit(V, sx, sy) {
+          if (!S.showNotes) return null;
+          const notes = S.doc.notes;
+          const geoms = notes.map((n) => noteGeom(wctx, V, n));
+          // later notes are drawn on top, so test them first; open boxes sit above every marker
+          for (let i = notes.length - 1; i >= 0; i--) {
+            const b = geoms[i].box;
+            if (!b) continue;
+            if (inCircle(b.btn, sx, sy)) return { note: notes[i], part: "toggle" };
+            if (inRect(b, sx, sy)) return { note: notes[i], part: "box" };
+          }
+          for (let i = notes.length - 1; i >= 0; i--) {
+            if (inCircle(geoms[i].btn, sx, sy)) return { note: notes[i], part: "toggle" };
+          }
+          for (let i = notes.length - 1; i >= 0; i--) {
+            const g = geoms[i];
+            if (sx >= g.px && sx < g.px + g.s && sy >= g.py && sy < g.py + g.s) return { note: notes[i], part: "cell" };
+          }
+          return null;
+        }
+
+        function drawToggle(ctx, c, col, open) {
+          ctx.beginPath();
+          ctx.arc(c.cx, c.cy, c.r, 0, Math.PI * 2);
+          ctx.fillStyle = "#12151b";
+          ctx.fill();
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = col;
+          ctx.stroke();
+          const a = c.r * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(c.cx - a, c.cy);
+          ctx.lineTo(c.cx + a, c.cy);
+          if (!open) { ctx.moveTo(c.cx, c.cy - a); ctx.lineTo(c.cx, c.cy + a); }
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = "#e6ecf6";
+          ctx.stroke();
+        }
+
+        function drawNotes(ctx, V) {
+          const selId = S.sel && S.sel.type === "note" ? S.sel.id : null;
+          const geoms = S.doc.notes.map((n) => [n, noteGeom(ctx, V, n)]);
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          // markers and their labels
+          for (const [n, g] of geoms) {
+            const { s, px, py, marker: m } = g;
+            if (px > V.w + 260 || py > V.h || px + s < 0 || py + s + 20 < 0) continue;
+            const col = n.color || NOTE_COLORS[0];
+            const fold = Math.min(m.w, m.h) * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(m.x, m.y);
+            ctx.lineTo(m.x + m.w, m.y);
+            ctx.lineTo(m.x + m.w, m.y + m.h - fold);
+            ctx.lineTo(m.x + m.w - fold, m.y + m.h);
+            ctx.lineTo(m.x, m.y + m.h);
+            ctx.closePath();
+            ctx.fillStyle = hexA(col, 0.92);
+            ctx.fill();
+            ctx.lineWidth = n.id === selId ? 2.2 : 1;
+            ctx.strokeStyle = n.id === selId ? "#ffffff" : "rgba(10,12,16,0.75)";
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(m.x + m.w, m.y + m.h - fold);
+            ctx.lineTo(m.x + m.w - fold, m.y + m.h - fold);
+            ctx.lineTo(m.x + m.w - fold, m.y + m.h);
+            ctx.closePath();
+            ctx.fillStyle = shade(col, -0.22);
+            ctx.fill();
+            if (s >= 14) {
+              ctx.strokeStyle = "rgba(10,12,16,0.55)";
+              ctx.lineWidth = Math.max(1, s * 0.035);
+              ctx.beginPath();
+              for (let i = 1; i <= 3; i++) {
+                const ly = m.y + (m.h * i) / 4.4;
+                ctx.moveTo(m.x + m.w * 0.18, ly);
+                ctx.lineTo(m.x + m.w * (i === 3 ? 0.5 : 0.82), ly);
+              }
+              ctx.stroke();
+            }
+            if (g.btn) drawToggle(ctx, g.btn, col, n.expanded);
+            if (!n.hideName && n.name && s > 12) {
+              const fs = clamp(Math.round(9.5 * Math.min(1.3, V.cam.zoom)), 8, 12);
+              ctx.font = `600 ${fs}px ${FONTF}`;
+              const tw = ctx.measureText(n.name).width;
+              ctx.fillStyle = "rgba(10,12,16,0.75)";
+              ctx.fillRect(px + s / 2 - tw / 2 - 3, py + s + 1, tw + 6, fs + 3);
+              ctx.fillStyle = shade(col, 0.2);
+              ctx.fillText(n.name, px + s / 2, py + s + 1 + fs / 2 + 1.5);
+            }
+          }
+          // open text boxes above everything else
+          ctx.textAlign = "left";
+          for (const [n, g] of geoms) {
+            const b = g.box;
+            if (!b || b.x > V.w || b.y > V.h || b.x + b.w < 0 || b.y + b.h < 0) continue;
+            const col = n.color || NOTE_COLORS[0];
+            const isSel = n.id === selId;
+            // tail from the marker to the box
+            ctx.strokeStyle = hexA(col, 0.7);
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(g.px + g.s, g.py + Math.min(g.s, b.headH) / 2);
+            ctx.lineTo(b.x, b.y + b.headH / 2);
+            ctx.stroke();
+            roundRect(ctx, b.x, b.y, b.w, b.h, 7);
+            ctx.fillStyle = "rgba(16,19,25,0.8)";
+            ctx.fill();
+            ctx.lineWidth = isSel ? 2 : 1.2;
+            ctx.strokeStyle = isSel ? "#ffffff" : hexA(col, 0.85);
+            ctx.stroke();
+            ctx.fillStyle = hexA(col, 0.9);
+            ctx.fillRect(b.x + 1, b.y + 4, 3, b.headH - 8);
+            ctx.font = `600 12.5px ${FONTF}`;
+            ctx.fillStyle = shade(col, 0.25);
+            let title = n.name || "Note";
+            const maxT = b.w - b.padX * 2 - 22;
+            while (title.length > 1 && ctx.measureText(title).width > maxT) title = title.slice(0, -2) + "…";
+            ctx.fillText(title, b.x + b.padX, b.y + b.headH / 2 + 0.5);
+            ctx.font = `12px ${FONTF}`;
+            if (b.body) {
+              ctx.fillStyle = "#dfe5ef";
+              b.body.forEach((ln, i) => ctx.fillText(ln, b.x + b.padX, b.y + b.headH + b.lh * i + b.lh / 2));
+            } else {
+              ctx.font = `italic 12px ${FONTF}`;
+              ctx.fillStyle = "#7d8798";
+              ctx.fillText("No details yet — add them in the Inspector.", b.x + b.padX, b.y + b.headH + b.lh / 2);
+            }
+            drawToggle(ctx, b.btn, col, true);
+          }
+          ctx.restore();
+        }
+
         function drawWorld(ctx, V, opts) {
           opts = opts || {};
           ctx.save();
@@ -2594,6 +2829,7 @@
           drawDoors(ctx, V);
           drawKeys(ctx, V);
           if (S.showStructs) drawStamps(ctx, V);
+          if (S.showNotes) drawNotes(ctx, V);
           if (opts.cursor !== false) drawCursor(ctx, V);
           ctx.restore();
         }
@@ -2629,7 +2865,9 @@
         function pickAt(V, p) {
           const wx = V.wx(p.x), wy = V.wy(p.y);
           const c = { x: Math.floor(wx / CELL), y: Math.floor(wy / CELL) };
-          // stamps are the top layer, then keys
+          // notes are the top layer, then stamps, then keys
+          const nh = noteHit(V, p.x, p.y);
+          if (nh) return { type: "note", id: nh.note.id, part: nh.part };
           if (S.showStructs) {
             const sid = stampIndex.get(ck(c.x, c.y));
             if (sid) return { type: "stamp", id: sid, cell: ck(c.x, c.y) };
@@ -2673,6 +2911,42 @@
           const alt = e.altKey || rmb;
           const shift = e.shiftKey && !rmb;
 
+          // a note's expand/collapse button works as a button whatever tool is active
+          if (!alt && S.showNotes) {
+            const nh = noteHit(V, p.x, p.y);
+            if (nh && nh.part === "toggle") {
+              pushUndo();
+              nh.note.expanded = !nh.note.expanded;
+              S.sel = { type: "note", id: nh.note.id };
+              commit();
+              return;
+            }
+            if (nh && (S.tool === "note" || nh.part === "box")) {
+              S.sel = { type: "note", id: nh.note.id };
+              S.drag = { type: "movenote", note: nh.note, undone: false };
+              commit(true);
+              return;
+            }
+          }
+          if (S.tool === "note") {
+            if (alt) {
+              const nh = noteHit(V, p.x, p.y);
+              const victim = nh ? nh.note : noteAtCell(c.x, c.y);
+              if (victim) { pushUndo(); deleteNote(victim.id); commit(); }
+              return;
+            }
+            const there = noteAtCell(c.x, c.y);
+            if (there) { S.sel = { type: "note", id: there.id }; commit(true); return; }
+            pushUndo();
+            const n = createNoteAt(c.x, c.y);
+            S.sel = { type: "note", id: n.id };
+            commit();
+            // jump straight into writing it
+            const fld = $("#i-ntext");
+            if (fld) fld.focus();
+            return;
+          }
+
           if (rmb && S.tool === "select") {
             removeAt(V, p);
             return;
@@ -2693,6 +2967,9 @@
               S.drag = { type: "move", room, startCell: c, moved: false, dx: 0, dy: 0, undone: false };
             } else if (hit && hit.type === "key") {
               S.drag = { type: "movekey", key: keyById(hit.id), startCell: c, moved: false, undone: false };
+            } else if (hit && hit.type === "note") {
+              S.sel = { type: "note", id: hit.id };
+              S.drag = { type: "movenote", note: noteById(hit.id), undone: false };
             } else if (hit && hit.type === "stamp") {
               S.activeStampId = hit.id;
               S.drag = { type: "movestamp", st: stampById(hit.id), cell: hit.cell, undone: false };
@@ -2820,7 +3097,8 @@
           if (!hit) return;
           const c = cellAtEvent(V, p);
           pushUndo();
-          if (hit.type === "stamp") eraseStampCell(hit.cell);
+          if (hit.type === "note") deleteNote(hit.id);
+          else if (hit.type === "stamp") eraseStampCell(hit.cell);
           else if (hit.type === "key") deleteKey(hit.id);
           else if (hit.type === "door") deleteDoor(hit.id);
           else if (hit.type === "edge") {
@@ -2896,6 +3174,10 @@
           const prev = S.hoverCell;
           S.hoverCell = c;
           S.hoverEdge = S.tool === "door" || S.tool === "edge" ? nearestEdge(wx, wy, 0.5) : null;
+          if (!S.drag && S.tool !== "pan") {
+            const nh = noteHit(V, p.x, p.y);
+            worldCanvas.style.cursor = nh && nh.part === "toggle" ? "pointer" : S.tool === "select" ? "default" : "crosshair";
+          }
           if (!prev || prev.x !== c.x || prev.y !== c.y || S.tool === "door" || S.tool === "edge") needsDraw = true;
 
           const d = S.drag;
@@ -2926,6 +3208,13 @@
               if (!d.undone) { pushUndo(); d.undone = true; }
               d.key.x = c.x; d.key.y = c.y;
               d.moved = true;
+              commit();
+            }
+          } else if (d.type === "movenote") {
+            if ((c.x !== d.note.x || c.y !== d.note.y) && !noteAtCell(c.x, c.y)) {
+              if (!d.undone) { pushUndo(); d.undone = true; }
+              d.note.x = c.x;
+              d.note.y = c.y;
               commit();
             }
           } else if (d.type === "movestamp") {
@@ -3065,8 +3354,18 @@
         /** Read a stored or imported keymap: missing tools fall back to defaults, keys are normalised. */
         function readKeymap(obj) {
           const src = obj && typeof obj === "object" ? obj.keys && typeof obj.keys === "object" ? obj.keys : obj : {};
-          const map = Object.assign({}, DEFAULT_TOOL_KEYS);
+          const map = {};
           for (const t of TOOL_LIST) if (typeof src[t.id] === "string") map[t.id] = normKey(src[t.id]);
+          // tools the source doesn't mention (e.g. added in a later version) get their default,
+          // or the first free key if a custom binding already took it
+          const used = new Set(Object.values(map));
+          for (const t of TOOL_LIST) {
+            if (map[t.id] !== undefined) continue;
+            let k = DEFAULT_TOOL_KEYS[t.id];
+            if (used.has(k)) k = Array.from("abcdefghijklmnopqrstuvwxyz0123456789").find((c) => !used.has(c) && !RESERVED_KEYS[c]);
+            map[t.id] = k;
+            used.add(k);
+          }
           return map;
         }
         function loadToolKeys() {
@@ -3125,6 +3424,11 @@
             return;
           }
           if (e.key === "Enter" && S.sel && S.sel.type === "room") { openDetail(S.sel.id); return; }
+          if (e.key === "Enter" && S.sel && S.sel.type === "note") {
+            const n = noteById(S.sel.id);
+            if (n) { pushUndo(); n.expanded = !n.expanded; commit(); }
+            return;
+          }
           if (e.key === "Delete" || e.key === "Backspace") {
             if (!S.sel) return;
             pushUndo();
@@ -3134,6 +3438,7 @@
             else if (S.sel.type === "lock") deleteLock(S.sel.id);
             else if (S.sel.type === "struct") deleteStruct(S.sel.id);
             else if (S.sel.type === "edge") deleteEdgeStruct(S.sel.id);
+            else if (S.sel.type === "note") deleteNote(S.sel.id);
             else if (S.sel.type === "stamp") {
               // a stamp picked on the map removes just that cell; one picked from the list removes the stamp
               if (S.sel.cell && stampIndex.get(S.sel.cell) === S.sel.id) { eraseStampCell(S.sel.cell); S.sel = { type: "stamp", id: S.sel.id }; }
@@ -3342,6 +3647,7 @@
           if (t === "struct") inspectStruct(host, structById(S.sel.id));
           else if (t === "edge") inspectEdgeStruct(host, edgeStructById(S.sel.id));
           else if (t === "stamp") inspectStamp(host, stampById(S.sel.id));
+          else if (t === "note") inspectNote(host, noteById(S.sel.id));
           else if (t === "room") inspectRoom(host, roomById(S.sel.id));
           else if (t === "door") inspectDoor(host, S.doc.doors.find((d) => d.id === S.sel.id));
           else if (t === "key") inspectKey(host, keyById(S.sel.id));
@@ -3351,16 +3657,18 @@
 
         /** Shared extras slotted in above the inspector's action buttons: name visibility and list order. */
         function decorateInspector(host) {
-          const sc = orderScope(S.sel);
-          if (!sc) return;
-          const named = ["room", "struct", "edge", "stamp", "key"].includes(S.sel.type);
+          let sc = orderScope(S.sel);
+          // notes stand alone: no list to order, but they still have a name to show or hide
+          const item = sc ? sc.item : S.sel.type === "note" ? noteById(S.sel.id) : null;
+          if (!item) return;
+          const named = ["room", "struct", "edge", "stamp", "key", "note"].includes(S.sel.type);
           let html = "";
           if (named) {
-            html += `<label class="check"><input type="checkbox" id="i-showname" ${sc.item.hideName ? "" : "checked"} />
+            html += `<label class="check"><input type="checkbox" id="i-showname" ${item.hideName ? "" : "checked"} />
               <span>Show name on map</span></label>`;
           }
-          const n = sc.peers.length, pos = sc.pos;
-          html += `<div class="fld"><label>Order${S.sel.type === "room" ? " in area" : ""}</label>
+          const n = sc ? sc.peers.length : 0, pos = sc ? sc.pos : 0;
+          if (sc) html += `<div class="fld"><label>Order${S.sel.type === "room" ? " in area" : ""}</label>
             <div class="ord">
               <button data-ord="top" title="Move to top (Shift+[)" ${pos === 0 ? "disabled" : ""}>⤒</button>
               <button data-ord="up" title="Move up ([)" ${pos === 0 ? "disabled" : ""}>↑</button>
@@ -3376,8 +3684,8 @@
           const sn = $("#i-showname");
           if (sn) sn.onchange = () => {
             pushUndo();
-            if (sn.checked) delete sc.item.hideName;
-            else sc.item.hideName = true;
+            if (sn.checked) delete item.hideName;
+            else item.hideName = true;
             commit();
           };
           wrap.querySelectorAll("[data-ord]").forEach((b) => (b.onclick = () => reorderSel(b.dataset.ord)));
@@ -3616,6 +3924,33 @@
         const inspectStruct = (host, s) => inspectLayerItem(host, s, false);
         const inspectEdgeStruct = (host, s) => inspectLayerItem(host, s, true);
 
+        function inspectNote(host, n) {
+          if (!n) return;
+          const col = n.color || NOTE_COLORS[0];
+          const room = roomAtCell(n.x, n.y);
+          host.innerHTML = `
+            <div class="insp-title"><span class="swatch" style="background:${col}"></span><span class="kind">Note</span></div>
+            <div class="fld"><label>Label</label><input type="text" id="i-name" value="${esc(n.name)}" placeholder="Shown under the note" /></div>
+            <div class="fld"><label>Details</label><textarea id="i-ntext" placeholder="What the expanded note says…">${esc(n.text)}</textarea></div>
+            <div class="fld"><label>Colour</label>${colorChips(NOTE_COLORS, n.color, "ncolor")}
+              <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#f0dc3a"}" /><span>Custom colour</span></div>
+            </div>
+            <button class="btn" id="i-expand">${n.expanded ? "▴ Collapse" : "▾ Expand"} on map</button>
+            <div class="meta">Cell ${n.x}, ${n.y}${room ? " · in " + esc(room.name) : ""} · <kbd>Enter</kbd> expands / collapses</div>
+            <div class="btn-row"><button class="btn danger" id="i-del">Delete note</button></div>`;
+
+          $("#i-name").oninput = (e) => { n.name = e.target.value; needsDraw = true; scheduleSave(); };
+          $("#i-ntext").oninput = (e) => { n.text = e.target.value; needsDraw = true; scheduleSave(); };
+          undoOnFocus($("#i-name"), $("#i-ntext"), $("#i-ccolor"));
+          host.querySelectorAll("[data-ncolor]").forEach((b) => {
+            b.onclick = () => { pushUndo(); n.color = b.dataset.ncolor; commit(); };
+          });
+          $("#i-ccolor").oninput = (e) => { n.color = e.target.value; needsDraw = true; scheduleSave(); };
+          $("#i-ccolor").onchange = () => commit();
+          $("#i-expand").onclick = () => { pushUndo(); n.expanded = !n.expanded; commit(); };
+          $("#i-del").onclick = () => { pushUndo(); deleteNote(n.id); commit(); };
+        }
+
         function inspectStamp(host, st) {
           if (!st) return;
           const col = structColor(st);
@@ -3818,6 +4153,7 @@
         };
         $("#chk-structs").onchange = (e) => { S.showStructs = e.target.checked; needsDraw = true; };
         $("#chk-slabels").onchange = (e) => { S.showStructLabels = e.target.checked; needsDraw = true; };
+        $("#chk-notes").onchange = (e) => { S.showNotes = e.target.checked; needsDraw = true; };
         // a per-browser preference, not part of the map document
         $("#sel-rclick").onchange = (e) => {
           S.rclick = e.target.value === "pan" ? "pan" : "remove";
@@ -4439,6 +4775,14 @@
                them; pick the emoji from the inspector's palette or type one — the field holds exactly one emoji. Click with the <b>Stamp</b> tool
                to place the active one, <b>Shift</b>-click to start a new stamp, <b>Alt</b>-click to remove one.
                Drag a placed stamp with <b>Select</b> to move just that cell.</p>
+            <h3>Notes</h3>
+            <p>A <b>note</b> is a standalone annotation pinned to one cell, drawn above everything else. Click a
+               cell with the <b>Note</b> tool to add one, then write its details in the Inspector. The <b>+</b>
+               button on the note (or <b>Enter</b> while it's selected) expands it into a translucent text box on
+               the map; the box's <b>−</b> button collapses it again. The label under the note can be hidden with
+               <b>Show name on map</b>. Notes have no list of their own — <b>Alt</b>-click, right-click remove or
+               <b>Del</b> deletes one, and <b>Show notes</b> hides them all. They are separate from the notes field
+               on rooms and structures.</p>
             <h3>Right-click</h3>
             <p>Choose what the right mouse button does under <b>Right-click</b> at the bottom of the left panel.
                <b>Remove</b> works like holding <b>Alt</b> with the current tool — erase cells, clear structure
@@ -4475,7 +4819,7 @@
               <b>Alt + paint</b><span>Erase instead</span>
               <b>Right-click</b><span>Remove, or drag to pan (configurable)</span>
               <b>F</b><span>Zoom to fit</span>
-              <b>Enter</b><span>Grey-box selected room</span>
+              <b>Enter</b><span>Grey-box selected room · expand / collapse selected note</span>
               <b>Del</b><span>Delete selection</span>
               <b>[ / ]</b><span>Move selection up / down its list</span>
               <b>Shift + [ / ]</b><span>Move selection to top / bottom</span>
@@ -4660,6 +5004,7 @@
           $("#chk-labels").checked = S.showLabels;
           $("#chk-structs").checked = S.showStructs;
           $("#chk-slabels").checked = S.showStructLabels;
+          $("#chk-notes").checked = S.showNotes;
           try { if (localStorage.getItem("mvmap:rclick") === "pan") S.rclick = "pan"; } catch (e) {}
           $("#sel-rclick").value = S.rclick;
           loadToolKeys();
