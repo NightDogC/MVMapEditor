@@ -59,7 +59,7 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 **Edge structures** — named, coloured sets of grid *edges*, drawn as thick bars on the lines between cells: platforms, ledges, one-way floors. With the **Edge** tool, drag along a grid line to lay a straight run of edges, or click a single edge. They use the same edge convention as doors, and ride along when their room moves.
 
-Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Toggle them with **Show structures** / **Show structure names**.
+Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Dragging moves only the connected *piece* you grab, so the separate parts of one structure stay independent: structure cells connect side by side (diagonal contact doesn't count), and edges connect when they share an end point, in a straight run or at a corner. Toggle them with **Show structures** / **Show structure names**.
 
 **Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
 

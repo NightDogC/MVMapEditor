@@ -1946,13 +1946,73 @@
             setEdge(ek(e.o, e.x + dx, e.y + dy), es);
           }
         }
-        function translateStruct(st, dx, dy) {
-          if (!dx && !dy) return;
-          shiftStructCells(st.cells.map((c) => [st, c]), dx, dy);
+        /* ── Connected pieces: Select moves one piece, not the whole set ── */
+        /** Cells of `cells` reachable from `start` through side-sharing neighbours (diagonals don't connect). */
+        function cellComponent(cells, start) {
+          const set = new Set(cells);
+          if (!set.has(start)) return [];
+          const seen = new Set([start]), q = [start], out = [];
+          while (q.length) {
+            const k = q.pop();
+            out.push(k);
+            const [x, y] = unck(k);
+            for (const n of [ck(x + 1, y), ck(x - 1, y), ck(x, y + 1), ck(x, y - 1)])
+              if (set.has(n) && !seen.has(n)) { seen.add(n); q.push(n); }
+          }
+          return out;
         }
-        function translateEdgeStruct(es, dx, dy) {
-          if (!dx && !dy) return;
-          shiftEdges(es.edges.map((k) => [es, k]), dx, dy);
+        /** The two grid vertices an edge runs between. */
+        const edgeVerts = (k) => {
+          const e = unek(k);
+          return e.o === "v" ? [ck(e.x, e.y), ck(e.x, e.y + 1)] : [ck(e.x, e.y), ck(e.x + 1, e.y)];
+        };
+        /** Edges of `edges` reachable from `start` through shared end points (straight runs and corners). */
+        function edgeComponent(edges, start) {
+          if (!edges.includes(start)) return [];
+          const byVert = new Map();
+          for (const k of edges)
+            for (const v of edgeVerts(k)) {
+              if (!byVert.has(v)) byVert.set(v, []);
+              byVert.get(v).push(k);
+            }
+          const seen = new Set([start]), q = [start], out = [];
+          while (q.length) {
+            const k = q.pop();
+            out.push(k);
+            for (const v of edgeVerts(k))
+              for (const n of byVert.get(v)) if (!seen.has(n)) { seen.add(n); q.push(n); }
+          }
+          return out;
+        }
+        /**
+         * Shift the piece being dragged (`d.part`, keys inside `list`) by one step. Keys the piece is
+         * currently lying over that belong to the same set (`d.under`) are left behind when it moves on,
+         * so dragging across the rest of the set never picks it up.
+         */
+        function stepPiece(d, list, set, ddx, ddy, shiftKey, put) {
+          const under = d.under || new Set();
+          const leaving = new Set(d.part.filter((k) => !under.has(k)));
+          set(list().filter((k) => !leaving.has(k)));
+          reindex();
+          const next = d.part.map(shiftKey);
+          const stay = new Set(list());
+          d.under = new Set(next.filter((k) => stay.has(k)));
+          next.forEach(put);
+          d.part = next;
+        }
+        function stepStructPiece(d, ddx, ddy) {
+          stepPiece(
+            d, () => d.st.cells, (v) => (d.st.cells = v), ddx, ddy,
+            (k) => { const [x, y] = unck(k); return ck(x + ddx, y + ddy); },
+            (k) => setStructCell(k, d.st)
+          );
+        }
+        function stepEdgePiece(d, ddx, ddy) {
+          stepPiece(
+            d, () => d.es.edges, (v) => (d.es.edges = v), ddx, ddy,
+            (k) => { const e = unek(k); return ek(e.o, e.x + ddx, e.y + ddy); },
+            (k) => setEdge(k, d.es)
+          );
         }
 
         /** Move a room's cells, its keys, the doors it solely owns, and the structures sitting on it. */
@@ -2891,9 +2951,9 @@
           if (S.showStructs) {
             const ee = nearestEdge(wx, wy, 0.16);
             const eid = ee && edgeIndex.get(ek(ee.o, ee.x, ee.y));
-            if (eid) return { type: "edge", id: eid };
+            if (eid) return { type: "edge", id: eid, edge: ek(ee.o, ee.x, ee.y) };
             const sid = structIndex.get(ck(c.x, c.y));
-            if (sid) return { type: "struct", id: sid };
+            if (sid) return { type: "struct", id: sid, cell: ck(c.x, c.y) };
           }
           const r = roomAtCell(c.x, c.y);
           if (r) return { type: "room", id: r.id };
@@ -2981,10 +3041,12 @@
               S.drag = { type: "movestamp", st: stampById(hit.id), cell: hit.cell, undone: false };
             } else if (hit && hit.type === "struct") {
               S.activeStructId = hit.id;
-              S.drag = { type: "movestruct", st: structById(hit.id), startCell: c, dx: 0, dy: 0, undone: false };
+              const st = structById(hit.id);
+              S.drag = { type: "movestruct", st, part: cellComponent(st.cells, hit.cell), startCell: c, dx: 0, dy: 0, undone: false };
             } else if (hit && hit.type === "edge") {
               S.activeEdgeId = hit.id;
-              S.drag = { type: "moveedge", es: edgeStructById(hit.id), startCell: c, dx: 0, dy: 0, undone: false };
+              const es = edgeStructById(hit.id);
+              S.drag = { type: "moveedge", es, part: edgeComponent(es.edges, hit.edge), startCell: c, dx: 0, dy: 0, undone: false };
             }
             commit(true);
             return;
@@ -3239,8 +3301,9 @@
             const dx = c.x - d.startCell.x, dy = c.y - d.startCell.y;
             if (dx !== d.dx || dy !== d.dy) {
               if (!d.undone) { pushUndo(); d.undone = true; }
-              if (d.type === "movestruct") translateStruct(d.st, dx - d.dx, dy - d.dy);
-              else translateEdgeStruct(d.es, dx - d.dx, dy - d.dy);
+              // only the connected piece that was grabbed moves; the rest of the set stays put
+              if (d.type === "movestruct") stepStructPiece(d, dx - d.dx, dy - d.dy);
+              else stepEdgePiece(d, dx - d.dx, dy - d.dy);
               d.dx = dx; d.dy = dy;
               commit();
             }
@@ -4771,10 +4834,13 @@
             <p>A <b>structure</b> is a named, coloured set of cells drawn on a layer above the rooms — walls,
                breakable or hidden walls, mechanisms, switches. Paint them with <b>S-Paint</b> or drag a box with
                <b>S-Rect</b>; <b>Shift</b> starts a new structure, <b>Alt</b> erases. Painting a structure never
-               changes the room underneath, and moving a room carries its structures along.</p>
+               changes the room underneath, and moving a room carries its structures along. Dragging with
+               <b>Select</b> moves only the connected piece you grab — cells joined side by side (not just at a
+               corner) — so separate pieces of one structure move independently.</p>
             <p>An <b>edge structure</b> lives on the grid lines instead of in cells, drawn as a thick bar — use it
                for platforms and ledges. With the <b>Edge</b> tool, drag along a grid line to lay a straight run of
-               edges, or click a single edge. <b>Shift</b> starts a new one, <b>Alt</b> removes edges.</p>
+               edges, or click a single edge. <b>Shift</b> starts a new one, <b>Alt</b> removes edges. Edges that
+               share an end point (in a line or at a corner) form one piece; <b>Select</b> drags one piece at a time.</p>
             <h3>Stamps</h3>
             <p>A <b>stamp</b> drops one emoji onto a single cell, on the very top layer — save points, items,
                bosses, shops. Like structures, each stamp has a name, colour and notes, and you can keep many of
