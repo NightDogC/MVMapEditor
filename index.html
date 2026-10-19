@@ -315,12 +315,31 @@
         flex: none;
         font-size: 12px;
       }
-      .rclick-row {
+      .opt-row {
         padding: 5px 2px 1px;
       }
-      .rclick-row select {
+      .opt-row select {
         flex: 1;
         min-width: 0;
+      }
+      .num-wrap {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .num-wrap input {
+        width: 58px;
+        background: var(--bg-3);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 2px 5px;
+        outline: none;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .num-wrap input:focus {
+        border-color: var(--acc-2);
       }
       #i-ntext {
         min-height: 110px;
@@ -945,19 +964,6 @@
           <div id="stamp-list" class="list"></div>
         </section>
 
-        <section class="sect">
-          <label class="check"><input type="checkbox" id="chk-flow" /><span>Show all lock ↔ key links</span></label>
-          <label class="check"><input type="checkbox" id="chk-labels" checked /><span>Show room names</span></label>
-          <label class="check"><input type="checkbox" id="chk-structs" checked /><span>Show structures</span></label>
-          <label class="check"><input type="checkbox" id="chk-slabels" checked /><span>Show structure names</span></label>
-          <label class="check"><input type="checkbox" id="chk-notes" checked /><span>Show notes</span></label>
-          <label class="inline rclick-row" title="What the right mouse button does on the map and in grey-box">Right-click
-            <select id="sel-rclick">
-              <option value="remove">Remove</option>
-              <option value="pan">Hold &amp; drag to pan</option>
-            </select>
-          </label>
-        </section>
       </aside>
 
       <!-- ── Stage ─────────────────────────────────────────────────── -->
@@ -993,6 +999,24 @@
             <span class="count" id="key-count">0</span>
           </div>
           <div id="key-list" class="list"></div>
+        </section>
+
+        <section class="sect">
+          <div class="sect-head"><h3>Options</h3></div>
+          <label class="check"><input type="checkbox" id="chk-flow" /><span>Show all lock ↔ key links</span></label>
+          <label class="check"><input type="checkbox" id="chk-labels" checked /><span>Show room names</span></label>
+          <label class="check"><input type="checkbox" id="chk-structs" checked /><span>Show structures</span></label>
+          <label class="check"><input type="checkbox" id="chk-slabels" checked /><span>Show structure names</span></label>
+          <label class="check"><input type="checkbox" id="chk-notes" checked /><span>Show notes</span></label>
+          <label class="inline opt-row" title="Stamp names appear once the map is zoomed in further than this">Stamp labels above zoom
+            <span class="num-wrap"><input type="number" id="num-stampzoom" min="10" max="800" step="5" value="60" />%</span>
+          </label>
+          <label class="inline opt-row" title="What the right mouse button does on the map and in grey-box">Right-click
+            <select id="sel-rclick">
+              <option value="remove">Remove</option>
+              <option value="pan">Hold &amp; drag to pan</option>
+            </select>
+          </label>
         </section>
       </aside>
     </div>
@@ -1272,6 +1296,7 @@
           showStructLabels: true,
           showNotes: true,
           rclick: "remove", // right mouse button: "remove" (like Alt) | "pan" (hold and drag)
+          stampZoom: 60, // stamp names show once the zoom is above this percentage
           hoverCell: null,
           hoverEdge: null,
           drag: null,
@@ -2717,7 +2742,7 @@
           const z = V.cam.zoom, s = CELL * z;
           const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
           const selCell = selId ? S.sel.cell : null;
-          const showNames = S.showStructLabels && z > 0.9;
+          const showNames = S.showStructLabels && z * 100 > S.stampZoom;
           ctx.save();
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -4330,7 +4355,20 @@
         $("#chk-structs").onchange = (e) => { S.showStructs = e.target.checked; needsDraw = true; };
         $("#chk-slabels").onchange = (e) => { S.showStructLabels = e.target.checked; needsDraw = true; };
         $("#chk-notes").onchange = (e) => { S.showNotes = e.target.checked; needsDraw = true; };
-        // a per-browser preference, not part of the map document
+        // per-browser preferences, not part of the map document
+        function setStampZoom(v, save) {
+          v = Math.round(+v);
+          if (!Number.isFinite(v)) v = 60;
+          S.stampZoom = clamp(v, 10, 800);
+          $("#num-stampzoom").value = S.stampZoom;
+          if (save) try { localStorage.setItem("mvmap:stampzoom", String(S.stampZoom)); } catch (err) {}
+          needsDraw = true;
+        }
+        $("#num-stampzoom").oninput = (e) => {
+          const v = +e.target.value;
+          if (e.target.value !== "" && Number.isFinite(v)) { S.stampZoom = clamp(v, 10, 800); needsDraw = true; }
+        };
+        $("#num-stampzoom").onchange = (e) => setStampZoom(e.target.value, true);
         $("#sel-rclick").onchange = (e) => {
           S.rclick = e.target.value === "pan" ? "pan" : "remove";
           try { localStorage.setItem("mvmap:rclick", S.rclick); } catch (err) {}
@@ -4968,10 +5006,10 @@
                button on the note (or <b>Enter</b> while it's selected) expands it into a translucent text box on
                the map; the box's <b>−</b> button collapses it again. The label under the note can be hidden with
                <b>Show name on map</b>. Notes have no list of their own — <b>Alt</b>-click, right-click remove or
-               <b>Del</b> deletes one, and <b>Show notes</b> hides them all. They are separate from the notes field
+               <b>Del</b> deletes one, and <b>Show notes</b> (in <b>Options</b>) hides them all. They are separate from the notes field
                on rooms and structures.</p>
             <h3>Right-click</h3>
-            <p>Choose what the right mouse button does under <b>Right-click</b> at the bottom of the left panel.
+            <p>Choose what the right mouse button does under <b>Right-click</b> in <b>Options</b>, at the bottom of the right panel.
                <b>Remove</b> works like holding <b>Alt</b> with the current tool — erase cells, clear structure
                cells or edges, delete a door, key or stamp; with <b>Select</b> it removes the smallest thing under
                the pointer, and in grey-box it erases boxes. <b>Hold &amp; drag to pan</b> turns it into a pan
@@ -5196,6 +5234,9 @@
           $("#chk-notes").checked = S.showNotes;
           try { if (localStorage.getItem("mvmap:rclick") === "pan") S.rclick = "pan"; } catch (e) {}
           $("#sel-rclick").value = S.rclick;
+          let sz = null;
+          try { sz = localStorage.getItem("mvmap:stampzoom"); } catch (e) {}
+          setStampZoom(sz === null ? 60 : sz, false);
           loadToolKeys();
           setTool("paint");
           setDTool("box");

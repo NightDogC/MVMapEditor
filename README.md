@@ -65,7 +65,9 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
 
-**Right-click** — configurable at the bottom of the left panel. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
+**Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
+
+**Right-click** — configurable under Options. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
 **Names & order** — a room's **Name position** puts its label in the centre or in one of four corners (anchored to a cell the room owns, so L-shapes keep it inside). Every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
 
@@ -240,6 +242,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 | localStorage fallback | `mvmap:docs` — all documents, keyed by id |
 | localStorage | `mvmap:last` — id of the last-opened map, restored on load |
 | localStorage | `mvmap:rclick` — right-click behaviour, `remove` or `pan` |
+| localStorage | `mvmap:stampzoom` — zoom percentage above which stamp names show (default `60`) |
 | localStorage | `mvmap:keys` — custom tool shortcuts, `{ "toolId": "key", … }` |
 
 ---
