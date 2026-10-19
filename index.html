@@ -1961,6 +1961,41 @@
           }
           return out;
         }
+        /**
+         * The keys of the selected structure / edge-structure piece. A selection made on the map carries an
+         * anchor (`cell` / `edge`) and means just that connected piece; one made from the list means the whole set.
+         * Returns { item, keys:Set, whole } or null.
+         */
+        function selPiece() {
+          if (!S.sel) return null;
+          if (S.sel.type === "struct") {
+            const st = structById(S.sel.id);
+            if (!st) return null;
+            const part = S.sel.cell && st.cells.includes(S.sel.cell) ? cellComponent(st.cells, S.sel.cell) : st.cells;
+            return { item: st, keys: new Set(part), whole: part.length === st.cells.length };
+          }
+          if (S.sel.type === "edge") {
+            const es = edgeStructById(S.sel.id);
+            if (!es) return null;
+            const part = S.sel.edge && es.edges.includes(S.sel.edge) ? edgeComponent(es.edges, S.sel.edge) : es.edges;
+            return { item: es, keys: new Set(part), whole: part.length === es.edges.length };
+          }
+          return null;
+        }
+        /** Delete the selected piece; the set itself goes once it has nothing left. */
+        function deleteSelPiece() {
+          const pc = selPiece();
+          if (!pc) return;
+          if (S.sel.type === "struct") {
+            pc.item.cells = pc.item.cells.filter((k) => !pc.keys.has(k));
+            if (!pc.item.cells.length) deleteStruct(pc.item.id);
+          } else {
+            pc.item.edges = pc.item.edges.filter((k) => !pc.keys.has(k));
+            if (!pc.item.edges.length) deleteEdgeStruct(pc.item.id);
+          }
+          S.sel = null;
+        }
+
         /** The two grid vertices an edge runs between. */
         const edgeVerts = (k) => {
           const e = unek(k);
@@ -2201,6 +2236,19 @@
           }
         }
 
+        /** The room cell a corner label sits in: top/bottom-most row, then left/right-most cell of it. */
+        function roomCorner(room, pos) {
+          let best = null;
+          for (const c of room.cells) {
+            const [x, y] = unck(c);
+            if (!best) { best = [x, y]; continue; }
+            const dy = pos[0] === "t" ? best[1] - y : y - best[1];
+            const dx = pos[1] === "l" ? best[0] - x : x - best[0];
+            if (dy > 0 || (dy === 0 && dx > 0)) best = [x, y];
+          }
+          return best;
+        }
+
         function drawRoomLabels(ctx, V) {
           const z = V.cam.zoom;
           if (z * CELL > 16) {
@@ -2210,15 +2258,27 @@
               if (room.hideName) continue;
               const b = roomBBox(room);
               if (!b) continue;
-              const cx = V.sx((b.x0 + b.w / 2) * CELL), cy = V.sy((b.y0 + b.h / 2) * CELL);
-              if (cx < -80 || cy < -20 || cx > V.w + 80 || cy > V.h + 20) continue;
               const fs = clamp(Math.round(11 * Math.min(1.4, z)), 9, 15);
               ctx.font = `600 ${fs}px ${FONTF}`;
               const tw = ctx.measureText(room.name).width;
+              const w = tw + 8, h = fs + 4, pad = 4;
+              // box centre; corners hug a cell the room really owns, so L-shapes keep the label inside
+              let bx, by;
+              const pos = room.labelPos;
+              if (pos === "tl" || pos === "tr" || pos === "bl" || pos === "br") {
+                const [x, y] = roomCorner(room, pos);
+                const L = V.sx(x * CELL), T = V.sy(y * CELL), R = V.sx((x + 1) * CELL), B = V.sy((y + 1) * CELL);
+                bx = pos[1] === "l" ? L + pad + w / 2 : R - pad - w / 2;
+                by = pos[0] === "t" ? T + pad + h / 2 : B - pad - h / 2;
+              } else {
+                bx = V.sx((b.x0 + b.w / 2) * CELL);
+                by = V.sy((b.y0 + b.h / 2) * CELL);
+              }
+              if (bx < -80 || by < -20 || bx > V.w + 80 || by > V.h + 20) continue;
               ctx.fillStyle = "rgba(10,12,16,0.62)";
-              ctx.fillRect(cx - tw / 2 - 4, cy - fs / 2 - 2, tw + 8, fs + 4);
+              ctx.fillRect(bx - w / 2, by - h / 2, w, h);
               ctx.fillStyle = "#e6ecf6";
-              ctx.fillText(room.name, cx, cy + 0.5);
+              ctx.fillText(room.name, bx, by + 0.5);
             }
           }
         }
@@ -2242,9 +2302,26 @@
           return p;
         }
 
+        /** Outline the outer boundary of a set of cells. */
+        function strokeSilhouette(ctx, V, cells, set) {
+          ctx.beginPath();
+          for (const c of cells) {
+            const [x, y] = unck(c);
+            const L = V.sx(x * CELL), T = V.sy(y * CELL);
+            const R = V.sx((x + 1) * CELL), B = V.sy((y + 1) * CELL);
+            if (R < 0 || B < 0 || L > V.w || T > V.h) continue;
+            if (!set.has(ck(x, y - 1))) { ctx.moveTo(L, T); ctx.lineTo(R, T); }
+            if (!set.has(ck(x, y + 1))) { ctx.moveTo(L, B); ctx.lineTo(R, B); }
+            if (!set.has(ck(x - 1, y))) { ctx.moveTo(L, T); ctx.lineTo(L, B); }
+            if (!set.has(ck(x + 1, y))) { ctx.moveTo(R, T); ctx.lineTo(R, B); }
+          }
+          ctx.stroke();
+        }
+
         function drawStructures(ctx, V) {
           const z = V.cam.zoom, s = CELL * z;
-          const selId = S.sel && S.sel.type === "struct" ? S.sel.id : null;
+          const pc = S.sel && S.sel.type === "struct" ? selPiece() : null;
+          const selId = pc ? pc.item.id : null;
           const hatch = hatchPattern(ctx);
           if (hatch && hatch.setTransform && typeof DOMMatrix !== "undefined") {
             // anchor the hatch to the world so it doesn't swim while panning
@@ -2254,38 +2331,35 @@
             if (!st.cells.length) continue;
             const col = structColor(st);
             const set = new Set(st.cells);
-            const isSel = st.id === selId;
             const isActive = st.id === S.activeStructId;
+            const hl = st.id === selId ? pc.keys : null; // the selected piece, if it's in this structure
 
-            ctx.beginPath();
-            for (const c of st.cells) {
-              const [x, y] = unck(c);
-              const px = V.sx(x * CELL), py = V.sy(y * CELL);
-              if (px > V.w || py > V.h || px + s < 0 || py + s < 0) continue;
-              ctx.rect(px, py, s + 0.5, s + 0.5);
-            }
-            ctx.fillStyle = hexA(col, isSel ? 0.78 : 0.6);
-            ctx.fill();
-            if (hatch && s >= 6) {
-              ctx.fillStyle = hatch;
+            for (const lit of hl ? [false, true] : [false]) {
+              ctx.beginPath();
+              for (const c of st.cells) {
+                if (hl && hl.has(c) !== lit) continue;
+                const [x, y] = unck(c);
+                const px = V.sx(x * CELL), py = V.sy(y * CELL);
+                if (px > V.w || py > V.h || px + s < 0 || py + s < 0) continue;
+                ctx.rect(px, py, s + 0.5, s + 0.5);
+              }
+              ctx.fillStyle = hexA(col, lit ? 0.8 : 0.6);
               ctx.fill();
+              if (hatch && s >= 6) {
+                ctx.fillStyle = hatch;
+                ctx.fill();
+              }
             }
 
-            ctx.strokeStyle = isSel ? "#ffffff" : shade(col, 0.22);
-            ctx.lineWidth = isSel ? 2.2 : isActive ? 1.8 : 1.2;
             ctx.lineCap = "square";
-            ctx.beginPath();
-            for (const c of st.cells) {
-              const [x, y] = unck(c);
-              const L = V.sx(x * CELL), T = V.sy(y * CELL);
-              const R = V.sx((x + 1) * CELL), B = V.sy((y + 1) * CELL);
-              if (R < 0 || B < 0 || L > V.w || T > V.h) continue;
-              if (!set.has(ck(x, y - 1))) { ctx.moveTo(L, T); ctx.lineTo(R, T); }
-              if (!set.has(ck(x, y + 1))) { ctx.moveTo(L, B); ctx.lineTo(R, B); }
-              if (!set.has(ck(x - 1, y))) { ctx.moveTo(L, T); ctx.lineTo(L, B); }
-              if (!set.has(ck(x + 1, y))) { ctx.moveTo(R, T); ctx.lineTo(R, B); }
+            ctx.strokeStyle = shade(col, 0.22);
+            ctx.lineWidth = isActive || hl ? 1.8 : 1.2;
+            strokeSilhouette(ctx, V, st.cells, set);
+            if (hl) {
+              ctx.strokeStyle = "#ffffff";
+              ctx.lineWidth = 2.2;
+              strokeSilhouette(ctx, V, hl, hl);
             }
-            ctx.stroke();
           }
         }
 
@@ -2305,7 +2379,8 @@
 
         function drawEdgeStructs(ctx, V) {
           const z = V.cam.zoom;
-          const selId = S.sel && S.sel.type === "edge" ? S.sel.id : null;
+          const pc = S.sel && S.sel.type === "edge" ? selPiece() : null;
+          const selId = pc ? pc.item.id : null;
           const t = edgeThickness(z);
           ctx.save();
           ctx.lineCap = "round";
@@ -2313,18 +2388,22 @@
           for (const es of S.doc.edgeStructs) {
             if (!es.edges.length) continue;
             const col = structColor(es);
-            const isSel = es.id === selId;
-            if (isSel) {
-              ctx.strokeStyle = hexA(col, 0.35);
+            const lit = es.id === selId ? [...pc.keys] : null; // just the selected piece glows
+            if (lit) {
+              ctx.strokeStyle = hexA(col, 0.4);
               ctx.lineWidth = t * 2.6;
-              strokeEdgeKeys(ctx, V, es.edges);
+              strokeEdgeKeys(ctx, V, lit);
             }
             ctx.strokeStyle = "rgba(8,10,14,0.85)";
             ctx.lineWidth = t + 2;
             strokeEdgeKeys(ctx, V, es.edges);
-            ctx.strokeStyle = isSel ? shade(col, 0.18) : col;
+            ctx.strokeStyle = col;
             ctx.lineWidth = t;
             strokeEdgeKeys(ctx, V, es.edges);
+            if (lit) {
+              ctx.strokeStyle = shade(col, 0.3);
+              strokeEdgeKeys(ctx, V, lit);
+            }
           }
           ctx.restore();
         }
@@ -3211,7 +3290,7 @@
             const owner = edgeIndex.get(keys[0]);
             // plain click on an existing edge just selects its structure
             if (owner && !d.erase && !d.fresh) {
-              S.sel = { type: "edge", id: owner };
+              S.sel = { type: "edge", id: owner, edge: keys[0] };
               S.activeEdgeId = owner;
               return;
             }
@@ -3302,8 +3381,11 @@
             if (dx !== d.dx || dy !== d.dy) {
               if (!d.undone) { pushUndo(); d.undone = true; }
               // only the connected piece that was grabbed moves; the rest of the set stays put
-              if (d.type === "movestruct") stepStructPiece(d, dx - d.dx, dy - d.dy);
-              else stepEdgePiece(d, dx - d.dx, dy - d.dy);
+              const ddx = dx - d.dx, ddy = dy - d.dy;
+              if (d.type === "movestruct") stepStructPiece(d, ddx, ddy);
+              else stepEdgePiece(d, ddx, ddy);
+              if (S.sel && S.sel.cell) { const [x, y] = unck(S.sel.cell); S.sel.cell = ck(x + ddx, y + ddy); }
+              if (S.sel && S.sel.edge) { const e = unek(S.sel.edge); S.sel.edge = ek(e.o, e.x + ddx, e.y + ddy); }
               d.dx = dx; d.dy = dy;
               commit();
             }
@@ -3505,8 +3587,7 @@
             else if (S.sel.type === "door") deleteDoor(S.sel.id);
             else if (S.sel.type === "key") deleteKey(S.sel.id);
             else if (S.sel.type === "lock") deleteLock(S.sel.id);
-            else if (S.sel.type === "struct") deleteStruct(S.sel.id);
-            else if (S.sel.type === "edge") deleteEdgeStruct(S.sel.id);
+            else if (S.sel.type === "struct" || S.sel.type === "edge") deleteSelPiece();
             else if (S.sel.type === "note") deleteNote(S.sel.id);
             else if (S.sel.type === "stamp") {
               // a stamp picked on the map removes just that cell; one picked from the list removes the stamp
@@ -3772,6 +3853,17 @@
             <div class="insp-title"><span class="swatch" style="background:${roomColor(r)}"></span>
               <span class="kind">Room</span></div>
             <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(r.name)}" /></div>
+            <div class="fld"><label>Name position</label>
+              <div class="seg" id="i-lpos">${[
+                ["center", "Center", "Centre of the room"],
+                ["tl", "↖", "Top left"],
+                ["tr", "↗", "Top right"],
+                ["bl", "↙", "Bottom left"],
+                ["br", "↘", "Bottom right"],
+              ]
+                .map(([v, t, tip]) => `<button data-lpos="${v}" title="${tip}" class="${(r.labelPos || "center") === v ? "on" : ""}">${t}</button>`)
+                .join("")}</div>
+            </div>
             <div class="fld"><label>Area</label><select id="i-area">${S.doc.areas
               .map((a) => `<option value="${a.id}" ${a.id === r.areaId ? "selected" : ""}>${esc(a.name)}</option>`)
               .join("")}</select></div>
@@ -3794,6 +3886,14 @@
           $("#i-notes").oninput = (e) => { r.notes = e.target.value; scheduleSave(); };
           $("#i-clear-color").onclick = () => { pushUndo(); r.color = null; commit(); };
           $("#i-detail").onclick = () => openDetail(r.id);
+          host.querySelectorAll("[data-lpos]").forEach((b2) => {
+            b2.onclick = () => {
+              pushUndo();
+              if (b2.dataset.lpos === "center") delete r.labelPos;
+              else r.labelPos = b2.dataset.lpos;
+              commit();
+            };
+          });
           $("#i-del").onclick = () => { pushUndo(); deleteRoom(r.id); commit(); };
           host.querySelectorAll("[data-color]").forEach((b2) => {
             b2.onclick = () => { pushUndo(); r.color = b2.dataset.color; commit(); };
@@ -3948,6 +4048,8 @@
           if (!it) return;
           const col = structColor(it);
           const count = isEdge ? it.edges.length : it.cells.length;
+          const pc = selPiece();
+          const piece = pc && pc.item === it && !pc.whole ? pc : null; // only worth a separate button when it isn't everything
           const b = isEdge
             ? null
             : cellsBBox(it.cells);
@@ -3963,10 +4065,13 @@
             <div class="fld"><label>Notes</label><textarea id="i-notes" placeholder="Behaviour, trigger, what opens it…">${esc(it.notes)}</textarea></div>
             <div class="meta">${count} ${isEdge ? "edge(s)" : "cell(s)"}${b ? ` · ${b.w}×${b.h} at ${b.x0},${b.y0}` : ""}${
               (isEdge ? S.activeEdgeId : S.activeStructId) === it.id ? " · active drawing target" : ""
+            }${
+              piece ? `<br />Selected piece: ${piece.keys.size} ${isEdge ? "edge(s)" : "cell(s)"} — <kbd>Del</kbd> removes just this piece. Pick it in the list to select every piece.` : ""
             }</div>
             <div class="btn-row">
               <button class="btn primary" id="i-draw">${isEdge ? "Draw edges" : "Paint into"}</button>
-              <button class="btn danger" id="i-del">Delete</button>
+              ${piece ? `<button class="btn danger" id="i-del-piece">Delete piece</button>` : ""}
+              <button class="btn danger" id="i-del">${piece ? "Delete all" : "Delete"}</button>
             </div>`;
 
           const refreshList = () => (isEdge ? renderEdgeStructs() : renderStructs());
@@ -3989,6 +4094,8 @@
             isEdge ? deleteEdgeStruct(it.id) : deleteStruct(it.id);
             commit();
           };
+          const dp = $("#i-del-piece");
+          if (dp) dp.onclick = () => { pushUndo(); deleteSelPiece(); commit(); };
         }
         const inspectStruct = (host, s) => inspectLayerItem(host, s, false);
         const inspectEdgeStruct = (host, s) => inspectLayerItem(host, s, true);
@@ -4745,7 +4852,13 @@
             try {
               const d = migrate(JSON.parse(rd.result));
               d.id = uid("map"); // import as a new map, never clobber
+              // the map you had open becomes the newest undo step, on top of its own history
+              const before = snapshot();
+              const history = undoStack.slice();
               loadDoc(d);
+              undoStack.push(...history, before);
+              while (undoStack.length > 120) undoStack.shift();
+              renderUI();
             } catch (err) {
               alert("Could not read that file: " + err.message);
             }
@@ -4834,13 +4947,15 @@
             <p>A <b>structure</b> is a named, coloured set of cells drawn on a layer above the rooms — walls,
                breakable or hidden walls, mechanisms, switches. Paint them with <b>S-Paint</b> or drag a box with
                <b>S-Rect</b>; <b>Shift</b> starts a new structure, <b>Alt</b> erases. Painting a structure never
-               changes the room underneath, and moving a room carries its structures along. Dragging with
-               <b>Select</b> moves only the connected piece you grab — cells joined side by side (not just at a
-               corner) — so separate pieces of one structure move independently.</p>
+               changes the room underneath, and moving a room carries its structures along. Clicking with
+               <b>Select</b> picks only the connected piece under the pointer — cells joined side by side (not just
+               at a corner) — so dragging moves it and <b>Del</b> deletes it without touching the structure's other
+               pieces. Picking the structure in its list selects every piece.</p>
             <p>An <b>edge structure</b> lives on the grid lines instead of in cells, drawn as a thick bar — use it
                for platforms and ledges. With the <b>Edge</b> tool, drag along a grid line to lay a straight run of
                edges, or click a single edge. <b>Shift</b> starts a new one, <b>Alt</b> removes edges. Edges that
-               share an end point (in a line or at a corner) form one piece; <b>Select</b> drags one piece at a time.</p>
+               share an end point (in a line or at a corner) form one piece; <b>Select</b> picks, drags and deletes
+               one piece at a time.</p>
             <h3>Stamps</h3>
             <p>A <b>stamp</b> drops one emoji onto a single cell, on the very top layer — save points, items,
                bosses, shops. Like structures, each stamp has a name, colour and notes, and you can keep many of
@@ -4862,7 +4977,8 @@
                the pointer, and in grey-box it erases boxes. <b>Hold &amp; drag to pan</b> turns it into a pan
                button instead. The choice is remembered in this browser.</p>
             <h3>Names &amp; order</h3>
-            <p>Every inspector has <b>Show name on map</b> to hide one object's label, and <b>Order</b> buttons
+            <p>A room's <b>Name position</b> puts its label in the centre or in one of its four corners.
+               Every inspector has <b>Show name on map</b> to hide one object's label, and <b>Order</b> buttons
                to move the selection up or down its list (rooms reorder within their area). Lists draw in order,
                so later entries paint over earlier ones.</p>
             <h3>Grey-boxing a room</h3>
@@ -4871,7 +4987,8 @@
                item, enemy, note. Doors on the room's border are drawn as anchors.</p>
             <h3>Storage</h3>
             <p>Maps autosave to your browser (IndexedDB, or localStorage when that isn't available). Use
-               <b>Export</b> for a portable <code>.json</code> file and <b>PNG</b> for an image of the whole map.</p>
+               <b>Export</b> for a portable <code>.json</code> file and <b>PNG</b> for an image of the whole map.
+               <b>Import</b> opens a file as a new map; <b>Undo</b> right after takes you back to the map you had open.</p>
             <h3>Tool shortcuts</h3>
             <p>Click a key, then press the new one. Taking a key another tool already uses swaps the two.
                Modifier combinations and the reserved keys — Space, F, Enter, Esc, Del, Backspace, [ ] and Tab —

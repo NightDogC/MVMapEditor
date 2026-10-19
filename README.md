@@ -59,7 +59,7 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 **Edge structures** — named, coloured sets of grid *edges*, drawn as thick bars on the lines between cells: platforms, ledges, one-way floors. With the **Edge** tool, drag along a grid line to lay a straight run of edges, or click a single edge. They use the same edge convention as doors, and ride along when their room moves.
 
-Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Dragging moves only the connected *piece* you grab, so the separate parts of one structure stay independent: structure cells connect side by side (diagonal contact doesn't count), and edges connect when they share an end point, in a straight run or at a corner. Toggle them with **Show structures** / **Show structure names**.
+Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Clicking on the map selects only the connected *piece* under the pointer — dragging moves it and `Del` deletes it — so the separate parts of one structure stay independent (pick the structure in its list to select every piece): structure cells connect side by side (diagonal contact doesn't count), and edges connect when they share an end point, in a straight run or at a corner. Toggle them with **Show structures** / **Show structure names**.
 
 **Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
 
@@ -67,7 +67,7 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Right-click** — configurable at the bottom of the left panel. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
-**Names & order** — every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
+**Names & order** — a room's **Name position** puts its label in the centre or in one of four corners (anchored to a cell the room owns, so L-shapes keep it inside). Every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
 
 **Grey-box view** — double-click a room to open its cells subdivided 4×, 8×, or 16×, with the world-cell boundaries still drawn as heavy lines and the border doors rendered as anchors. Block out the interior with typed boxes: solid, platform, hazard, water, ladder, exit, item, enemy, note. Move, resize, and label them. Changing subdivision rescales existing boxes in place.
 
@@ -222,13 +222,15 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
 **Notes** sit on cell `(x, y)` in world grid coordinates, at most one per cell. `expanded` is saved with the map, so an open note stays open.
 
+**`labelPos`** on a room places its name: `"tl"`, `"tr"`, `"bl"` or `"br"` for a corner; absent means centred.
+
 **`hideName: true`** may appear on rooms, structures, edge structures, stamps, notes and keys to hide that object's label on the map. When absent the name is shown.
 
 **Edge-structure edges** are `"o:x,y"` strings using the door edge convention above, e.g. `"h:3,5"`. Each edge belongs to at most one edge structure.
 
 **Grey-box boxes** use absolute sub-cell coordinates, i.e. `worldCell * sub`. They aren't relative to the room's bounding box, so repainting the room's cells never shifts its interior geometry. Changing `sub` rescales all boxes to keep them in place.
 
-**Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library.
+**Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library. The map that was open becomes the newest undo step, so `Ctrl+Z` straight after an import brings it back.
 
 ### Browser storage
 
