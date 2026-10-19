@@ -3066,6 +3066,18 @@
 
         worldCanvas.addEventListener("pointerdown", (e) => {
           const rmb = e.button === 2;
+          // with the Pan tool, a note's expand/collapse button still works as a button
+          if (e.button === 0 && S.tool === "pan" && !S.spaceDown && S.showNotes) {
+            const ep = evPos(e);
+            const nh = noteHit(makeView(S.cam, VW, VH), ep.x, ep.y);
+            if (nh && nh.part === "toggle") {
+              pushUndo();
+              nh.note.expanded = !nh.note.expanded;
+              S.sel = { type: "note", id: nh.note.id };
+              commit();
+              return;
+            }
+          }
           if (e.button === 1 || S.spaceDown || S.tool === "pan" || (rmb && S.rclick === "pan")) {
             e.preventDefault();
             worldCanvas.setPointerCapture(e.pointerId);
@@ -3346,9 +3358,10 @@
           const prev = S.hoverCell;
           S.hoverCell = c;
           S.hoverEdge = S.tool === "door" || S.tool === "edge" ? nearestEdge(wx, wy, 0.5) : null;
-          if (!S.drag && S.tool !== "pan") {
+          if (!S.drag) {
             const nh = noteHit(V, p.x, p.y);
-            worldCanvas.style.cursor = nh && nh.part === "toggle" ? "pointer" : S.tool === "select" ? "default" : "crosshair";
+            const idle = S.tool === "pan" ? "grab" : S.tool === "select" ? "default" : "crosshair";
+            worldCanvas.style.cursor = nh && nh.part === "toggle" && !S.spaceDown ? "pointer" : idle;
           }
           if (!prev || prev.x !== c.x || prev.y !== c.y || S.tool === "door" || S.tool === "edge") needsDraw = true;
 
