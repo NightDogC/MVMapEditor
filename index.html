@@ -1214,7 +1214,8 @@
         // doc.structures[]  { id, name, color, notes, cells:["x,y",…] }   a layer drawn over rooms
         // doc.edgeStructs[] { id, name, color, notes, edges:["o:x,y",…] } same edge convention as doors
         // doc.stamps[]      { id, name, emoji, color, notes, cells:["x,y",…] } one emoji per cell, drawn on top
-        // doc.notes[]       { id, name, text, color, x, y, expanded } a standalone annotation on one cell, above stamps
+        // doc.notes[]       { id, name, text, color, x, y, expanded, box?:{dx,dy} } a standalone annotation on one
+        //                   cell, above stamps; box is the open panel's offset from its default spot, in screen px
         //   rooms/structures/edgeStructs/stamps/keys may carry hideName:true to hide their map label
         function newDoc(name) {
           const a = { id: uid("area"), name: "Area 1", color: AREA_COLORS[0] };
@@ -1263,6 +1264,7 @@
             if (typeof n.text !== "string") n.text = "";
             if (!n.color) n.color = NOTE_COLORS[0];
             n.expanded = !!n.expanded;
+            if (!(n.box && Number.isFinite(n.box.dx) && Number.isFinite(n.box.dy))) delete n.box;
           });
           d.stamps = Array.isArray(d.stamps) ? d.stamps : [];
           d.stamps.forEach((s) => {
@@ -2838,7 +2840,8 @@
             ctx.font = `12px ${FONTF}`;
             const body = n.text.trim() ? wrapLines(ctx, n.text, W - padX * 2, 40) : null;
             const h = headH + (body ? body.length * lh : lh) + 10;
-            const box = { x: px + s + 8, y: py, w: W, h, headH, lh, padX, body };
+            const off = n.box || { dx: 0, dy: 0 };
+            const box = { x: px + s + 8 + off.dx, y: py + off.dy, w: W, h, headH, lh, padX, body };
             box.btn = { cx: box.x + W - 13, cy: box.y + headH / 2, r: 8 };
             g.box = box;
           }
@@ -2950,10 +2953,14 @@
             // tail from the marker to the box
             ctx.strokeStyle = hexA(col, 0.7);
             ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(g.px + g.s, g.py + Math.min(g.s, b.headH) / 2);
-            ctx.lineTo(b.x, b.y + b.headH / 2);
-            ctx.stroke();
+            const mx = g.px + g.s / 2, my = g.py + g.s / 2;
+            const tx = clamp(mx, b.x, b.x + b.w), ty = clamp(my, b.y, b.y + b.h);
+            if (tx !== mx || ty !== my) {
+              ctx.beginPath();
+              ctx.moveTo(mx, my);
+              ctx.lineTo(tx, ty);
+              ctx.stroke();
+            }
             roundRect(ctx, b.x, b.y, b.w, b.h, 7);
             ctx.fillStyle = "rgba(16,19,25,0.8)";
             ctx.fill();
@@ -3066,7 +3073,7 @@
 
         worldCanvas.addEventListener("pointerdown", (e) => {
           const rmb = e.button === 2;
-          // with the Pan tool, a note's expand/collapse button still works as a button
+          // with the Pan tool, a note's expand/collapse button and open box still respond
           if (e.button === 0 && S.tool === "pan" && !S.spaceDown && S.showNotes) {
             const ep = evPos(e);
             const nh = noteHit(makeView(S.cam, VW, VH), ep.x, ep.y);
@@ -3075,6 +3082,13 @@
               nh.note.expanded = !nh.note.expanded;
               S.sel = { type: "note", id: nh.note.id };
               commit();
+              return;
+            }
+            if (nh && nh.part === "box") {
+              worldCanvas.setPointerCapture(e.pointerId);
+              S.sel = { type: "note", id: nh.note.id };
+              S.drag = { type: "movebox", note: nh.note, last: ep, undone: false };
+              commit(true);
               return;
             }
           }
@@ -3103,7 +3117,14 @@
               commit();
               return;
             }
-            if (nh && (S.tool === "note" || nh.part === "box")) {
+            if (nh && nh.part === "box") {
+              // dragging the open box moves the box, not the note
+              S.sel = { type: "note", id: nh.note.id };
+              S.drag = { type: "movebox", note: nh.note, last: p, undone: false };
+              commit(true);
+              return;
+            }
+            if (nh && S.tool === "note") {
               S.sel = { type: "note", id: nh.note.id };
               S.drag = { type: "movenote", note: nh.note, undone: false };
               commit(true);
@@ -3361,7 +3382,8 @@
           if (!S.drag) {
             const nh = noteHit(V, p.x, p.y);
             const idle = S.tool === "pan" ? "grab" : S.tool === "select" ? "default" : "crosshair";
-            worldCanvas.style.cursor = nh && nh.part === "toggle" && !S.spaceDown ? "pointer" : idle;
+            worldCanvas.style.cursor =
+              !nh || S.spaceDown ? idle : nh.part === "toggle" ? "pointer" : nh.part === "box" ? "move" : idle;
           }
           if (!prev || prev.x !== c.x || prev.y !== c.y || S.tool === "door" || S.tool === "edge") needsDraw = true;
 
@@ -3394,6 +3416,16 @@
               d.key.x = c.x; d.key.y = c.y;
               d.moved = true;
               commit();
+            }
+          } else if (d.type === "movebox") {
+            const ddx = p.x - d.last.x, ddy = p.y - d.last.y;
+            if (ddx || ddy) {
+              if (!d.undone) { pushUndo(); d.undone = true; }
+              const o = d.note.box || { dx: 0, dy: 0 };
+              d.note.box = { dx: o.dx + ddx, dy: o.dy + ddy };
+              d.last = p;
+              needsDraw = true;
+              scheduleSave();
             }
           } else if (d.type === "movenote") {
             if ((c.x !== d.note.x || c.y !== d.note.y) && !noteAtCell(c.x, c.y)) {
@@ -4149,7 +4181,10 @@
             <div class="fld"><label>Colour</label>${colorChips(NOTE_COLORS, n.color, "ncolor")}
               <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#f0dc3a"}" /><span>Custom colour</span></div>
             </div>
-            <button class="btn" id="i-expand">${n.expanded ? "▴ Collapse" : "▾ Expand"} on map</button>
+            <div class="btn-row">
+              <button class="btn" id="i-expand">${n.expanded ? "▴ Collapse" : "▾ Expand"} on map</button>
+              ${n.box ? `<button class="btn" id="i-boxreset" title="Put the open box back beside the note">Reset box position</button>` : ""}
+            </div>
             <div class="meta">Cell ${n.x}, ${n.y}${room ? " · in " + esc(room.name) : ""} · <kbd>Enter</kbd> expands / collapses</div>
             <div class="btn-row"><button class="btn danger" id="i-del">Delete note</button></div>`;
 
@@ -4162,6 +4197,8 @@
           $("#i-ccolor").oninput = (e) => { n.color = e.target.value; needsDraw = true; scheduleSave(); };
           $("#i-ccolor").onchange = () => commit();
           $("#i-expand").onclick = () => { pushUndo(); n.expanded = !n.expanded; commit(); };
+          const br = $("#i-boxreset");
+          if (br) br.onclick = () => { pushUndo(); delete n.box; commit(); };
           $("#i-del").onclick = () => { pushUndo(); deleteNote(n.id); commit(); };
         }
 
@@ -5017,7 +5054,8 @@
             <p>A <b>note</b> is a standalone annotation pinned to one cell, drawn above everything else. Click a
                cell with the <b>Note</b> tool to add one, then write its details in the Inspector. The <b>+</b>
                button on the note (or <b>Enter</b> while it's selected) expands it into a translucent text box on
-               the map; the box's <b>−</b> button collapses it again. The label under the note can be hidden with
+               the map; the box's <b>−</b> button collapses it again. Drag the open box anywhere — it remembers where you left
+               it, even after collapsing; <b>Reset box position</b> in the Inspector puts it back. The label under the note can be hidden with
                <b>Show name on map</b>. Notes have no list of their own — <b>Alt</b>-click, right-click remove or
                <b>Del</b> deletes one, and <b>Show notes</b> (in <b>Options</b>) hides them all. They are separate from the notes field
                on rooms and structures.</p>

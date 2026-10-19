@@ -63,7 +63,7 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
 
-**Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
+**Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. Drag the open box anywhere (in any tool, Pan included); it keeps that spot after collapsing and reopening, and **Reset box position** in the Inspector puts it back beside the note. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
 
 **Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
@@ -222,7 +222,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
 **Stamp cells** are `"x,y"` keys on their own layer; each cell holds at most one stamp.
 
-**Notes** sit on cell `(x, y)` in world grid coordinates, at most one per cell. `expanded` is saved with the map, so an open note stays open.
+**Notes** sit on cell `(x, y)` in world grid coordinates, at most one per cell. `expanded` is saved with the map, so an open note stays open. `box: { dx, dy }`, when present, is how far the open box was dragged from its default spot beside the note, in screen pixels (the box is drawn at a fixed screen size, so the offset holds at any zoom).
 
 **`labelPos`** on a room places its name: `"tl"`, `"tr"`, `"bl"` or `"br"` for a corner; absent means centred.
 
