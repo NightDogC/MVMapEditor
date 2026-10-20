@@ -384,6 +384,17 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .row.untyped .nm {
+        color: var(--danger);
+      }
+      .untyped-tag {
+        font-size: 10px;
+        color: var(--danger);
+        border: 1px solid var(--danger);
+        border-radius: 3px;
+        padding: 0 3px;
+        white-space: nowrap;
+      }
       .sub {
         font-size: 10.5px;
         color: var(--tx-mute);
@@ -1068,6 +1079,7 @@
         if (!window.MVMapTypes || !window.MVMapUE) alert("mvmap-types.js / mvmap-ue.js not found — keep them in the same folder as index.html.");
         const UE = window.MVMapUE;
         const REGIONS = window.MVMapTypes.regions;
+        const ELEMENT_TYPES = window.MVMapTypes.types;
         /* ══════════════════════════════════════════════════════════════
            1 · Utilities
            ══════════════════════════════════════════════════════════════ */
@@ -1227,6 +1239,10 @@
         // doc.notes[]       { id, name, text, color, x, y, expanded, box?:{dx,dy} } a standalone annotation on one
         //                   cell, above stamps; box is the open panel's offset from its default spot, in screen px
         //   rooms/structures/edgeStructs/stamps/keys may carry hideName:true to hide their map label
+        //   structures/edgeStructs/stamps may carry typeId: a type id from mvmap-types.js
+        //   (null = unclassified: created in the editor, or picked by hand).
+        //   A missing typeId is filled in on load when the name matches a type label (mvmap-ue.js migrateTypeIds);
+        //   export writes it only when it is a type of that layer
         function newDoc(name) {
           const a = { id: uid("area"), name: "Area 1", color: AREA_COLORS[0] };
           return {
@@ -1286,7 +1302,7 @@
             s.edges = Array.isArray(s.edges) ? s.edges : [];
             if (typeof s.notes !== "string") s.notes = "";
           });
-          return d;
+          return UE.migrateTypeIds(d, ELEMENT_TYPES);
         }
 
         /* ══════════════════════════════════════════════════════════════
@@ -1771,7 +1787,7 @@
         /* ── Structures (cell layer over rooms) ───────────────────── */
         function createStruct() {
           const n = S.doc.structures.length;
-          const s = { id: uid("struct"), name: "Structure " + (n + 1), color: STRUCT_COLORS[n % STRUCT_COLORS.length], notes: "", cells: [] };
+          const s = { id: uid("struct"), name: UE.defaultElementName("structure", n + 1), color: STRUCT_COLORS[n % STRUCT_COLORS.length], notes: "", cells: [], typeId: null };
           S.doc.structures.push(s);
           S.activeStructId = s.id;
           return s;
@@ -1812,7 +1828,7 @@
         /* ── Edge structures (thick grid edges, e.g. platforms) ────── */
         function createEdgeStruct() {
           const n = S.doc.edgeStructs.length;
-          const s = { id: uid("edge"), name: "Platform " + (n + 1), color: STRUCT_COLORS[(n + 4) % STRUCT_COLORS.length], notes: "", edges: [] };
+          const s = { id: uid("edge"), name: UE.defaultElementName("edge", n + 1), color: STRUCT_COLORS[(n + 4) % STRUCT_COLORS.length], notes: "", edges: [], typeId: null };
           S.doc.edgeStructs.push(s);
           S.activeEdgeId = s.id;
           return s;
@@ -1854,11 +1870,12 @@
           const n = S.doc.stamps.length;
           const s = {
             id: uid("stamp"),
-            name: "Stamp " + (n + 1),
+            name: UE.defaultElementName("stamp", n + 1),
             emoji: STAMP_EMOJI[n % STAMP_EMOJI.length],
             color: STRUCT_COLORS[(n + 5) % STRUCT_COLORS.length],
             notes: "",
             cells: [],
+            typeId: null,
           };
           S.doc.stamps.push(s);
           S.activeStampId = s.id;
@@ -3803,6 +3820,10 @@
             .join("");
         }
 
+        /** List row extras for an element with no usable type: a class that turns its name red, and a "未分类" tag. */
+        const untyped = (it, layer) => !UE.elementTypeOf(it, layer, ELEMENT_TYPES);
+        const untypedTag = (it, layer) => (untyped(it, layer) ? `<span class="untyped-tag">未分类</span>` : "");
+
         function renderStructs() {
           const host = $("#struct-list");
           $("#struct-count").textContent = S.doc.structures.length;
@@ -3813,9 +3834,10 @@
           const selId = S.sel && S.sel.type === "struct" ? S.sel.id : null;
           host.innerHTML = S.doc.structures
             .map(
-              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-struct="${s.id}">
+              (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "structure") ? "untyped" : ""}" data-struct="${s.id}">
                   <span class="swatch" style="background:${structColor(s)}"></span>
                   <span class="nm">${esc(s.name)}${s.id === S.activeStructId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  ${untypedTag(s, "structure")}
                   <span class="sub">${s.cells.length}</span>
                 </div>`
             )
@@ -3832,9 +3854,10 @@
           const selId = S.sel && S.sel.type === "edge" ? S.sel.id : null;
           host.innerHTML = S.doc.edgeStructs
             .map(
-              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-edge="${s.id}">
+              (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "edge") ? "untyped" : ""}" data-edge="${s.id}">
                   <span class="swatch" style="background:${structColor(s)};height:4px;border-radius:2px"></span>
                   <span class="nm">${esc(s.name)}${s.id === S.activeEdgeId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  ${untypedTag(s, "edge")}
                   <span class="sub">${s.edges.length}</span>
                 </div>`
             )
@@ -3851,9 +3874,10 @@
           const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
           host.innerHTML = S.doc.stamps
             .map(
-              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-stamp="${s.id}">
+              (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "stamp") ? "untyped" : ""}" data-stamp="${s.id}">
                   <span class="emo">${esc(s.emoji)}</span>
                   <span class="nm">${esc(s.name)}${s.id === S.activeStampId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  ${untypedTag(s, "stamp")}
                   <span class="sub">${s.cells.length}</span>
                 </div>`
             )
@@ -4163,6 +4187,32 @@
           $("#i-del").onclick = () => { pushUndo(); deleteLock(l.id); commit(); };
         }
 
+        /** "Type" dropdown for structures, edge structures and stamps; only the types of `layer` are offered. */
+        function typeField(it, layer) {
+          const cur = UE.elementTypeOf(it, layer, ELEMENT_TYPES);
+          const unknown = it.typeId != null && !cur;
+          const hint = cur
+            ? cur.generate === "auto" ? "UE import generates this element" : "UE import leaves a placeholder — placed by hand"
+            : unknown ? "Not a type of this layer in mvmap-types.js — counts as 未分类" : "未分类 — pick a type for the UE importer";
+          return `<div class="fld"><label>Type</label><select id="i-type">
+              <option value="" ${cur || unknown ? "" : "selected"}>— 未分类 —</option>
+              ${unknown ? `<option value="${esc(it.typeId)}" selected>unknown: ${esc(it.typeId)}</option>` : ""}
+              ${UE.typesForLayer(ELEMENT_TYPES, layer)
+                .map((t) => `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(t.label)} · ${t.generate}</option>`)
+                .join("")}
+            </select>
+            <div class="meta ${cur ? "" : "err"}">${hint}</div></div>`;
+        }
+        function bindTypeField(it, layer) {
+          $("#i-type").onchange = (e) => {
+            const next = UE.chooseType(it, layer, e.target.value, ELEMENT_TYPES);
+            if (next.typeId === it.typeId) return; // re-picked the current or the "unknown" entry
+            pushUndo();
+            Object.assign(it, next);
+            commit();
+          };
+        }
+
         /** Shared inspector for structures and edge structures — both are a named, coloured set. */
         function inspectLayerItem(host, it, isEdge) {
           if (!it) return;
@@ -4179,6 +4229,7 @@
             <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(it.name)}" placeholder="${
               isEdge ? "One-way platform, ledge…" : "Breakable wall, hidden wall, lever…"
             }" /></div>
+            ${typeField(it, isEdge ? "edge" : "structure")}
             <div class="fld"><label>Colour</label>${colorChips(STRUCT_COLORS, it.color, "scolor")}
               <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#b8c0cc"}" /><span>Custom colour</span></div>
             </div>
@@ -4197,6 +4248,7 @@
           const refreshList = () => (isEdge ? renderEdgeStructs() : renderStructs());
           $("#i-name").oninput = (e) => { it.name = e.target.value; needsDraw = true; refreshList(); scheduleSave(); };
           $("#i-notes").oninput = (e) => { it.notes = e.target.value; scheduleSave(); };
+          bindTypeField(it, isEdge ? "edge" : "structure");
           undoOnFocus($("#i-name"), $("#i-notes"), $("#i-ccolor"));
           host.querySelectorAll("[data-scolor]").forEach((b2) => {
             b2.onclick = () => { pushUndo(); it.color = b2.dataset.scolor; commit(); };
@@ -4260,6 +4312,7 @@
           host.innerHTML = `
             <div class="insp-title"><span class="emo">${esc(st.emoji)}</span><span class="kind">Stamp</span></div>
             <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(st.name)}" placeholder="Save point, boss, chest…" /></div>
+            ${typeField(st, "stamp")}
             <div class="fld"><label>Emoji</label>
               <input type="text" id="i-emoji" value="${esc(st.emoji)}" placeholder="One emoji (Win + .)" autocomplete="off" spellcheck="false" />
               <div class="emoji-grid" style="margin-top:4px">${STAMP_EMOJI.map(
@@ -4281,6 +4334,7 @@
 
           $("#i-name").oninput = (e) => { st.name = e.target.value; needsDraw = true; renderStamps(); scheduleSave(); };
           $("#i-notes").oninput = (e) => { st.notes = e.target.value; scheduleSave(); };
+          bindTypeField(st, "stamp");
           // exactly one emoji: typing or pasting replaces the current one, anything else is dropped
           const emo = $("#i-emoji");
           emo.addEventListener("focus", () => emo.select());
@@ -4980,7 +5034,7 @@
           const errs = UE.findUeFieldErrors(S.doc, REGIONS);
           if (errs.length && !confirm(ueErrorText(errs) + "\n\nExport anyway?")) return;
           S.doc.updated = Date.now();
-          const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS), null, 2)], { type: "application/json" });
+          const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS, ELEMENT_TYPES), null, 2)], { type: "application/json" });
           saveBlob(blob, slug(S.doc.name) + ".mvmap.json");
         }
         $("#btn-export").onclick = exportJSON;

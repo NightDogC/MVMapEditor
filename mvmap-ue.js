@@ -1,4 +1,4 @@
-/* Pure helpers for the fields the UE whitebox importer reads: area region, room number, export shape.
+/* Pure helpers for the fields the UE whitebox importer reads: area region, room number, element typeId, export shape.
    Loaded by index.html as a classic <script> (exposes window.MVMapUE) and by node tests via require(). */
 (function (root, factory) {
   const api = factory();
@@ -46,8 +46,9 @@
     return errors;
   }
 
-  /** Copy of the document as written to .mvmap.json: every area gets region + letter, every room gets number (null = unset). */
-  function buildExportDoc(doc, regions) {
+  /** Copy of the document as written to .mvmap.json: every area gets region + letter, every room gets number (null = unset),
+      structures/edgeStructs/stamps keep typeId only when it names a type of their layer (unclassified = no typeId field). */
+  function buildExportDoc(doc, regions, types) {
     const out = JSON.parse(JSON.stringify(doc));
     for (const a of out.areas || []) {
       if (a.region == null) a.region = null;
@@ -55,8 +56,64 @@
       a.letter = reg ? reg.letter : null;
     }
     for (const r of out.rooms || []) r.number = isRoomNumber(r.number) ? r.number : null;
+    for (const [list, layer] of ELEMENT_LAYERS) {
+      for (const el of out[list] || []) if (!elementTypeOf(el, layer, types)) delete el.typeId;
+    }
     return out;
   }
 
-  return { roomCode, parseRoomNumber, findUeFieldErrors, buildExportDoc, findRegion };
+  /** Element types offered in a layer's "Type" dropdown. layer: "structure" | "edge" | "stamp". */
+  const typesForLayer = (types, layer) => types.filter((t) => t.layer === layer);
+
+  /** The element's type, or null when it is unclassified (no typeId, an id not in the vocabulary, or a type for another layer). */
+  const elementTypeOf = (el, layer, types) =>
+    (el && el.typeId != null && types.find((t) => t.id === el.typeId && t.layer === layer)) || null;
+
+  /** Document list -> the vocabulary layer its elements use. */
+  const ELEMENT_LAYERS = [
+    ["structures", "structure"],
+    ["edgeStructs", "edge"],
+    ["stamps", "stamp"],
+  ];
+
+  /** Copy of the document where every element without a typeId field gets one if its name is exactly a type label of its layer.
+      Existing typeIds are kept as-is, including ones the vocabulary doesn't know and null (created in the editor, or 未分类 picked by hand). */
+  function migrateTypeIds(doc, types) {
+    const out = JSON.parse(JSON.stringify(doc));
+    for (const [list, layer] of ELEMENT_LAYERS) {
+      for (const el of out[list] || []) {
+        if (el.typeId !== undefined) continue;
+        const t = types.find((x) => x.layer === layer && x.label === el.name);
+        if (t) el.typeId = t.id;
+      }
+    }
+    return out;
+  }
+
+  /** Name the editor gives the n-th new element of a layer, before the user renames it or picks a type. */
+  const DEFAULT_NAME_PREFIX = { structure: "Structure ", edge: "Platform ", stamp: "Stamp " };
+  const defaultElementName = (layer, n) => DEFAULT_NAME_PREFIX[layer] + n;
+  const hasDefaultName = (el, layer) => new RegExp("^" + DEFAULT_NAME_PREFIX[layer] + "\\d+$").test(el.name);
+
+  /** Copy of the element after picking `typeId` in its Type dropdown ("" = 未分类, stored as null so loading never re-guesses it).
+      A brand-new element (typeId null or missing, default name) also takes the type's name and colour, and its emoji on stamps.
+      An id that isn't a type of this layer (the dropdown's "unknown: …" entry) changes nothing. */
+  function chooseType(el, layer, typeId, types) {
+    const out = Object.assign({}, el);
+    if (!typeId) { out.typeId = null; return out; }
+    const t = typesForLayer(types, layer).find((x) => x.id === typeId);
+    if (!t) return out;
+    if (el.typeId == null && hasDefaultName(el, layer)) {
+      out.name = t.label;
+      out.color = t.color;
+      if (layer === "stamp") out.emoji = t.emoji;
+    }
+    out.typeId = t.id;
+    return out;
+  }
+
+  return {
+    roomCode, parseRoomNumber, findUeFieldErrors, buildExportDoc, findRegion,
+    typesForLayer, elementTypeOf, migrateTypeIds, defaultElementName, chooseType,
+  };
 });

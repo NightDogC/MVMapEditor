@@ -191,7 +191,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
   "structures": [
     { "id": "struct_s1", "name": "Breakable Wall", "color": "#c9885a",
-      "notes": "Bomb it.", "cells": ["4,4", "4,5"] }
+      "notes": "Bomb it.", "cells": ["4,4", "4,5"],
+      "typeId": "OneWayDoor" }   // UE import field, see below
   ],
 
   "stamps": [
@@ -238,6 +239,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 `area.region` is an `ENSRegionList` enum name picked from `mvmap-types.js`; it is set from any room's inspector and applies to the whole area.
 `area.letter` is that region's letter, written on export only. `room.number` is a positive integer, unique within its area; the room's code is the letter plus the number padded to two digits (`B01`).
 Export always writes all three, with `null` when unset; older files without them load fine. Duplicate numbers in an area, or unknown regions, are reported when a map is imported or opened from the library, and again on export.
+`typeId` on structures, edge structures and stamps is a type id from `mvmap-types.js`, picked in the inspector's Type dropdown (only that layer's types are offered); the element's name is display only. An element with no `typeId` field gets one when a map is loaded, if its name is exactly a type's label for that layer; otherwise it is listed in red as 未分类. `typeId: null` (elements created in the editor, or 未分类 picked by hand) is never re-guessed from the name. Picking a type for a new element that still has its default name (`Structure 1`, `Platform 1`, `Stamp 1`) also gives it the type's label, colour and (stamps) emoji. Export writes `typeId` only when it is a type of the element's layer, and leaves the field out otherwise.
 
 **Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library. The map that was open becomes the newest undo step, so `Ctrl+Z` straight after an import brings it back.
 
@@ -258,8 +260,8 @@ Export always writes all three, with `null` when unset; older files without them
 
 ```
 index.html       the editor
-mvmap-types.js   vocabulary shared with the UE importer (regions); edit this, not index.html
-mvmap-ue.js      pure helpers for the UE import fields (validation, room code, export shape)
+mvmap-types.js   vocabulary shared with the UE importer (regions, element types); edit this, not index.html
+mvmap-ue.js      pure helpers for the UE import fields (validation, room code, element types, export shape)
 test/            node --test tests for the two scripts above; run `npm test`
 package.json     only defines `npm test`, no dependencies
 README.md
