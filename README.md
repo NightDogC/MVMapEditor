@@ -4,7 +4,7 @@ Forked from https://github.com/TitaniumCladStudios/MVMap
 
 A metroidvania map editor. Paint rooms onto grid paper, colour them by area, connect them with doors, and model progression with locks and keys — then grey-box the inside of any room without leaving the tool.
 
-It's a single self-contained `index.html`. No build step, no dependencies, no server, no account.
+It's a plain `index.html` plus two small scripts next to it (`mvmap-types.js`, `mvmap-ue.js`). No build step, no dependencies, no server, no account.
 
 Built to design an unannounced metroidvania.
 
@@ -12,7 +12,7 @@ Built to design an unannounced metroidvania.
 
 ## Running it
 
-Double-click `index.html`. That's it.
+Double-click `index.html`. That's it. Keep `mvmap-types.js` and `mvmap-ue.js` in the same folder — the editor warns and stops working without them.
 
 For real IndexedDB storage instead of the localStorage fallback, serve it over HTTP:
 
@@ -25,7 +25,7 @@ Chrome denies IndexedDB to `file://` pages, so opening the file directly falls b
 
 ### Deploying
 
-Commit `index.html` to a repo and enable GitHub Pages on the branch. There's nothing to configure — the file is fully self-contained, and Pages serves over HTTPS so you get proper IndexedDB.
+Commit `index.html`, `mvmap-types.js` and `mvmap-ue.js` to a repo and enable GitHub Pages on the branch. There's nothing to configure, and Pages serves over HTTPS so you get proper IndexedDB.
 
 ---
 
@@ -143,7 +143,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
   "updated": 1753660800000,
 
   "areas": [
-    { "id": "area_x1", "name": "Sunken Cistern", "color": "#4c8dd8" }
+    { "id": "area_x1", "name": "Sunken Cistern", "color": "#4c8dd8",
+      "region": "XianZuCi", "letter": "B" }   // UE import fields, see below
   ],
 
   "rooms": [
@@ -153,7 +154,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
       "areaId": "area_x1",
       "color": null,              // null = inherit the area colour
       "notes": "Ambush after the water drains.",
-      "cells": ["3,4", "4,4", "4,5"]
+      "cells": ["3,4", "4,4", "4,5"],
+      "number": 1                 // UE import field, see below
     }
   ],
 
@@ -232,6 +234,11 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
 **Grey-box boxes** use absolute sub-cell coordinates, i.e. `worldCell * sub`. They aren't relative to the room's bounding box, so repainting the room's cells never shifts its interior geometry. Changing `sub` rescales all boxes to keep them in place.
 
+**UE import fields** feed the NSProject whitebox importer, which builds sub-level names and FacilityID tags from them (`XianZuCi_Room_B01_LD`).
+`area.region` is an `ENSRegionList` enum name picked from `mvmap-types.js`; it is set from any room's inspector and applies to the whole area.
+`area.letter` is that region's letter, written on export only. `room.number` is a positive integer, unique within its area; the room's code is the letter plus the number padded to two digits (`B01`).
+Export always writes all three, with `null` when unset; older files without them load fine. Duplicate numbers in an area, or unknown regions, are reported when a map is imported or opened from the library, and again on export.
+
 **Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library. The map that was open becomes the newest undo step, so `Ctrl+Z` straight after an import brings it back.
 
 ### Browser storage
@@ -250,7 +257,11 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 ## Repo
 
 ```
-index.html   the entire editor
+index.html       the editor
+mvmap-types.js   vocabulary shared with the UE importer (regions); edit this, not index.html
+mvmap-ue.js      pure helpers for the UE import fields (validation, room code, export shape)
+test/            node --test tests for the two scripts above; run `npm test`
+package.json     only defines `npm test`, no dependencies
 README.md
 ```
 

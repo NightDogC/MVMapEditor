@@ -644,6 +644,9 @@
         font-size: 11px;
         color: var(--tx-mute);
       }
+      .meta.err {
+        color: var(--danger);
+      }
 
       /* ── Detail overlay ────────────────────────────────────────── */
       .overlay {
@@ -1057,9 +1060,14 @@
     <input type="file" id="file-input" accept="application/json,.json" hidden />
     <input type="file" id="keys-input" accept="application/json,.json" hidden />
 
+    <script src="mvmap-types.js"></script>
+    <script src="mvmap-ue.js"></script>
     <script>
       "use strict";
       (function () {
+        if (!window.MVMapTypes || !window.MVMapUE) alert("mvmap-types.js / mvmap-ue.js not found — keep them in the same folder as index.html.");
+        const UE = window.MVMapUE;
+        const REGIONS = window.MVMapTypes.regions;
         /* ══════════════════════════════════════════════════════════════
            1 · Utilities
            ══════════════════════════════════════════════════════════════ */
@@ -1204,7 +1212,9 @@
         /* ══════════════════════════════════════════════════════════════
            3 · Document model
            ══════════════════════════════════════════════════════════════ */
-        // doc.rooms[]  { id, name, areaId, color|null, notes, cells:["x,y",…] }
+        // doc.areas[]  { id, name, color, region? }  region: ENSRegionList enum name from mvmap-types.js
+        // doc.rooms[]  { id, name, areaId, color|null, notes, cells:["x,y",…], number? }  number: positive int, unique per area
+        //   export (mvmap-ue.js buildExportDoc) always writes area.region/area.letter/room.number, null when unset
         // doc.doors[]  { id, x, y, o:"v"|"h", kind:"passage"|"door"|"oneway", dir:1|-1, lockId|null }
         //              a "v" edge at (x,y) divides cells (x-1,y) | (x,y)
         //              an "h" edge at (x,y) divides cells (x,y-1) / (x,y)
@@ -3916,9 +3926,18 @@
             .map((c) => `<button class="chip ${c === current ? "on" : ""}" style="background:${c}" data-${attr}="${c}"></button>`)
             .join("")}</div>`;
 
+        /** Inline warning under the room number: another room in the same area already uses it. */
+        function numberWarning(r) {
+          if (r.number == null) return "";
+          const twins = S.doc.rooms.filter((o) => o !== r && o.areaId === r.areaId && o.number === r.number);
+          return twins.length ? `Also used by ${twins.map((o) => `“${esc(o.name)}”`).join(", ")} in this area` : "";
+        }
+
         function inspectRoom(host, r) {
           const b = roomBBox(r);
           const det = S.doc.detail[r.id];
+          const area = areaById(r.areaId);
+          const region = UE.findRegion(REGIONS, area.region);
           host.innerHTML = `
             <div class="insp-title"><span class="swatch" style="background:${roomColor(r)}"></span>
               <span class="kind">Room</span></div>
@@ -3937,6 +3956,16 @@
             <div class="fld"><label>Area</label><select id="i-area">${S.doc.areas
               .map((a) => `<option value="${a.id}" ${a.id === r.areaId ? "selected" : ""}>${esc(a.name)}</option>`)
               .join("")}</select></div>
+            <div class="fld"><label>Region (whole area “${esc(area.name)}”)</label><select id="i-region">
+              <option value="">— not set —</option>
+              ${area.region != null && !region ? `<option value="${esc(area.region)}" selected>unknown: ${esc(area.region)}</option>` : ""}
+              ${REGIONS.map((g) => `<option value="${g.region}" ${g.region === area.region ? "selected" : ""}>${esc(g.label)}</option>`).join("")}
+            </select></div>
+            <div class="fld"><label>Number in area</label>
+              <input type="text" id="i-number" inputmode="numeric" value="${r.number == null ? "" : esc(String(r.number))}" placeholder="1, 2, 3…" />
+              <div class="meta err" id="i-number-err">${numberWarning(r)}</div>
+              <div class="meta">Code: ${UE.roomCode(region && region.letter, r.number) || "—"}</div>
+            </div>
             <div class="fld"><label>Colour override</label>
               ${colorChips(AREA_COLORS, r.color, "color")}
               <button class="btn" id="i-clear-color" style="margin-top:4px">Use area colour</button>
@@ -3953,6 +3982,27 @@
           $("#i-name").oninput = (e) => { r.name = e.target.value; needsDraw = true; renderRooms(); scheduleSave(); };
           undoOnFocus($("#i-name"), $("#i-notes"));
           $("#i-area").onchange = (e) => { pushUndo(); r.areaId = e.target.value; S.activeAreaId = r.areaId; commit(); };
+          $("#i-region").onchange = (e) => {
+            pushUndo();
+            if (e.target.value) area.region = e.target.value;
+            else delete area.region;
+            commit();
+          };
+          // live parse error while typing; otherwise keep showing the stored number's duplicate warning
+          $("#i-number").oninput = (e) => { $("#i-number-err").innerHTML = esc(UE.parseRoomNumber(e.target.value).error || "") || numberWarning(r); };
+          $("#i-number").onchange = (e) => {
+            const p = UE.parseRoomNumber(e.target.value);
+            if (p.error) {
+              // keep the stored value; leave the message up so it's clear why the field snapped back
+              e.target.value = r.number == null ? "" : String(r.number);
+              $("#i-number-err").textContent = p.error + " — kept the previous value";
+              return;
+            }
+            pushUndo();
+            if (p.value == null) delete r.number;
+            else r.number = p.value;
+            commit();
+          };
           $("#i-notes").oninput = (e) => { r.notes = e.target.value; scheduleSave(); };
           $("#i-clear-color").onclick = () => { pushUndo(); r.color = null; commit(); };
           $("#i-detail").onclick = () => openDetail(r.id);
@@ -4925,9 +4975,12 @@
         /* ══════════════════════════════════════════════════════════════
            15 · Import / export
            ══════════════════════════════════════════════════════════════ */
+        const ueErrorText = (errs) => "Region / room number problems (the UE importer will reject these rooms):\n\n• " + errs.join("\n• ");
         function exportJSON() {
+          const errs = UE.findUeFieldErrors(S.doc, REGIONS);
+          if (errs.length && !confirm(ueErrorText(errs) + "\n\nExport anyway?")) return;
           S.doc.updated = Date.now();
-          const blob = new Blob([JSON.stringify(S.doc, null, 2)], { type: "application/json" });
+          const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS), null, 2)], { type: "application/json" });
           saveBlob(blob, slug(S.doc.name) + ".mvmap.json");
         }
         $("#btn-export").onclick = exportJSON;
@@ -4992,6 +5045,9 @@
           $("#map-name").value = S.doc.name;
           commit();
           fitWorld();
+          const errs = UE.findUeFieldErrors(S.doc, REGIONS);
+          // after the map has had a chance to draw, so the user can see what the message is about
+          if (errs.length) setTimeout(() => alert(ueErrorText(errs)), 50);
         }
         $("#btn-new").onclick = () => {
           if ((S.doc.rooms.length || S.doc.structures.length || S.doc.edgeStructs.length) && !confirm("Start a new map? The current one stays saved in your library.")) return;
