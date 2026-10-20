@@ -1022,6 +1022,9 @@
           <label class="check"><input type="checkbox" id="chk-structs" checked /><span>Show structures</span></label>
           <label class="check"><input type="checkbox" id="chk-slabels" checked /><span>Show structure names</span></label>
           <label class="check"><input type="checkbox" id="chk-notes" checked /><span>Show notes</span></label>
+          <label class="check" title="Fade everything except the structures, edges and stamps the UE importer leaves for hand placement (manual or 未分类)"
+            ><input type="checkbox" id="chk-manual" /><span>Highlight hand-placed only</span></label
+          >
           <label class="inline opt-row" title="Stamp names appear once the map is zoomed in further than this">Stamp labels above zoom
             <span class="num-wrap"><input type="number" id="num-stampzoom" min="10" max="800" step="5" value="60" />%</span>
           </label>
@@ -1323,6 +1326,7 @@
           showStructs: true,
           showStructLabels: true,
           showNotes: true,
+          highlightManual: false, // fade everything but the elements the UE importer leaves for hand placement
           rclick: "remove", // right mouse button: "remove" (like Alt) | "pan" (hold and drag)
           stampZoom: 60, // stamp names show once the zoom is above this percentage
           hoverCell: null,
@@ -2383,6 +2387,7 @@
           }
           for (const st of S.doc.structures) {
             if (!st.cells.length) continue;
+            ctx.globalAlpha = markAlpha(st, "structure");
             const col = structColor(st);
             const set = new Set(st.cells);
             const isActive = st.id === S.activeStructId;
@@ -2415,6 +2420,7 @@
               strokeSilhouette(ctx, V, hl, hl);
             }
           }
+          ctx.globalAlpha = 1;
         }
 
         const edgeThickness = (z) => clamp(CELL * z * 0.16, 2.5, 9);
@@ -2441,6 +2447,7 @@
           ctx.lineJoin = "round";
           for (const es of S.doc.edgeStructs) {
             if (!es.edges.length) continue;
+            ctx.globalAlpha = markAlpha(es, "edge");
             const col = structColor(es);
             const lit = es.id === selId ? [...pc.keys] : null; // just the selected piece glows
             if (lit) {
@@ -2481,6 +2488,7 @@
             if (st.hideName) continue;
             const b = cellsBBox(st.cells);
             if (!b) continue;
+            ctx.globalAlpha = markAlpha(st, "structure");
             label(st.name, structColor(st), V.sx((b.x0 + b.w / 2) * CELL), V.sy((b.y0 + b.h / 2) * CELL));
           }
           for (const es of S.doc.edgeStructs) {
@@ -2496,8 +2504,10 @@
             const off = edgeThickness(z) / 2 + fs / 2 + 4;
             const cx = V.sx(m.x) + (e.o === "v" ? off + ctx.measureText(es.name).width / 2 : 0);
             const cy = V.sy(m.y) - (e.o === "h" ? off : 0);
+            ctx.globalAlpha = markAlpha(es, "edge");
             label(es.name, structColor(es), cx, cy);
           }
+          ctx.globalAlpha = 1;
         }
 
         function drawDoors(ctx, V) {
@@ -2780,6 +2790,8 @@
           for (const st of S.doc.stamps) {
             const col = structColor(st);
             const isSel = st.id === selId;
+            const alpha = markAlpha(st, "stamp");
+            ctx.globalAlpha = alpha;
             for (const c of st.cells) {
               const [x, y] = unck(c);
               const px = V.sx(x * CELL), py = V.sy(y * CELL);
@@ -2799,7 +2811,7 @@
                 ctx.fillStyle = "#ffffff";
                 ctx.fillText(st.emoji, cx, cy + s * 0.04);
               }
-              if (showNames && !st.hideName && st.name) labels.push({ text: st.name, col, cx, top: py, bottom: py + s });
+              if (showNames && !st.hideName && st.name) labels.push({ text: st.name, col, alpha, cx, top: py, bottom: py + s });
             }
           }
 
@@ -2815,6 +2827,7 @@
             const box = !hits(below) ? below : !hits(above) ? above : null;
             if (!box) continue;
             placed.push(box);
+            ctx.globalAlpha = l.alpha;
             ctx.fillStyle = "rgba(10,12,16,0.72)";
             ctx.fillRect(box.x, box.y, box.w, box.h);
             ctx.fillStyle = shade(l.col, 0.3);
@@ -3016,6 +3029,118 @@
           ctx.restore();
         }
 
+        /* Elements the UE importer won't generate (manual types, and 未分类 ones) get a dashed outline and a badge
+           in the cell nearest the top-left; "Highlight hand-placed only" fades everything else. */
+        const MARK_STYLE = {
+          manual: { color: "#ffb02e", glyph: "手", dash: [6, 4] },
+          unclassified: { color: "#ff4d5e", glyph: "?", dash: [2, 3] },
+        };
+        const MARK_FADE = 0.18;
+        const markOf = (it, layer) => UE.manualMarkOf(it, layer, ELEMENT_TYPES);
+        /** Draw alpha for an element: faded when highlighting hand-placed elements and this one is generated. */
+        const markAlpha = (it, layer) => (S.highlightManual && !markOf(it, layer) ? MARK_FADE : 1);
+
+        /** Cell key of the top-most, then left-most cell. */
+        function topLeftCell(cells) {
+          let best = null, bx = 0, by = 0;
+          for (const c of cells) {
+            const [x, y] = unck(c);
+            if (best === null || y < by || (y === by && x < bx)) { best = c; bx = x; by = y; }
+          }
+          return best;
+        }
+
+        /** Split `keys` into connected pieces, using cellComponent or edgeComponent as `componentOf`. */
+        function connectedPieces(keys, componentOf) {
+          const seen = new Set(), out = [];
+          for (const k of keys) {
+            if (seen.has(k)) continue;
+            const piece = componentOf(keys, k);
+            for (const p of piece) seen.add(p);
+            out.push(piece);
+          }
+          return out;
+        }
+
+        function drawMarkBadge(ctx, V, mark, cx, cy, r) {
+          if (cx < -r || cy < -r || cx > V.w + r || cy > V.h + r) return;
+          const m = MARK_STYLE[mark];
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fillStyle = m.color;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "rgba(8,10,14,0.9)";
+          ctx.stroke();
+          ctx.fillStyle = "#12151b";
+          ctx.font = `700 ${Math.round(r * 1.25)}px ${FONTF}`;
+          ctx.fillText(m.glyph, cx, cy + 0.5);
+        }
+
+        function drawManualMarks(ctx, V) {
+          const z = V.cam.zoom, s = CELL * z;
+          const marked = []; // only the elements that get a marker
+          const collect = (layer, it, size) => {
+            const mark = size ? markOf(it, layer) : null;
+            if (mark) marked.push({ layer, it, mark });
+          };
+          for (const st of S.doc.structures) collect("structure", st, st.cells.length);
+          for (const es of S.doc.edgeStructs) collect("edge", es, es.edges.length);
+          for (const st of S.doc.stamps) collect("stamp", st, st.cells.length);
+
+          ctx.save();
+          // outlines: a dark dashed underlay keeps the dashes readable over any fill colour
+          ctx.lineCap = "butt";
+          const lw = Math.max(2, edgeThickness(z) * 0.45);
+          for (const { layer, it, mark } of marked) {
+            const style = MARK_STYLE[mark];
+            ctx.setLineDash(style.dash);
+            for (const [col, w] of [["rgba(8,10,14,0.85)", lw + 2], [style.color, lw]]) {
+              ctx.strokeStyle = col;
+              ctx.lineWidth = w;
+              if (layer === "structure") strokeSilhouette(ctx, V, it.cells, new Set(it.cells));
+              else if (layer === "edge") strokeEdgeKeys(ctx, V, it.edges);
+              else {
+                const pad = Math.max(1, s * 0.08);
+                for (const c of it.cells) {
+                  const [x, y] = unck(c);
+                  const px = V.sx(x * CELL), py = V.sy(y * CELL);
+                  if (px > V.w || py > V.h || px + s < 0 || py + s < 0) continue;
+                  roundRect(ctx, px + pad, py + pad, s - pad * 2, s - pad * 2, Math.min(6, s * 0.18));
+                  ctx.stroke();
+                }
+              }
+            }
+          }
+          ctx.setLineDash([]);
+
+          // badges on top of every outline: one per connected piece (the unit Select picks), one per stamp cell
+          if (s >= 8) {
+            const r = clamp(s * 0.22, 5, 9), inset = r * 0.35;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (const { layer, it, mark } of marked) {
+              if (layer === "edge") {
+                for (const piece of connectedPieces(it.edges, edgeComponent)) {
+                  let bx = Infinity, by = Infinity;
+                  for (const k of piece) {
+                    const [x0, y0] = edgeEnds(unek(k)); // the start is the top / left end
+                    if (y0 < by || (y0 === by && x0 < bx)) { bx = x0; by = y0; }
+                  }
+                  drawMarkBadge(ctx, V, mark, V.sx(bx), V.sy(by), r);
+                }
+              } else {
+                const cells = layer === "stamp" ? it.cells : connectedPieces(it.cells, cellComponent).map(topLeftCell);
+                for (const c of cells) {
+                  const [x, y] = unck(c);
+                  drawMarkBadge(ctx, V, mark, V.sx(x * CELL) + inset, V.sy(y * CELL) + inset, r);
+                }
+              }
+            }
+          }
+          ctx.restore();
+        }
+
         function drawWorld(ctx, V, opts) {
           opts = opts || {};
           ctx.save();
@@ -3029,11 +3154,20 @@
           }
           if (opts.labels !== undefined ? opts.labels : S.showLabels) drawRoomLabels(ctx, V);
           if (S.showStructs && S.showStructLabels) drawStructLabels(ctx, V);
+          // rooms stay at full strength as the frame of reference; locks, keys and notes fade with generated elements
+          const fade = S.highlightManual ? MARK_FADE : 1;
+          ctx.globalAlpha = fade;
           drawFlow(ctx, V);
           drawDoors(ctx, V);
           drawKeys(ctx, V);
-          if (S.showStructs) drawStamps(ctx, V);
+          ctx.globalAlpha = 1;
+          if (S.showStructs) {
+            drawStamps(ctx, V);
+            drawManualMarks(ctx, V);
+          }
+          ctx.globalAlpha = fade;
           if (S.showNotes) drawNotes(ctx, V);
+          ctx.globalAlpha = 1;
           if (opts.cursor !== false) drawCursor(ctx, V);
           ctx.restore();
         }
@@ -4509,6 +4643,7 @@
         $("#chk-structs").onchange = (e) => { S.showStructs = e.target.checked; needsDraw = true; };
         $("#chk-slabels").onchange = (e) => { S.showStructLabels = e.target.checked; needsDraw = true; };
         $("#chk-notes").onchange = (e) => { S.showNotes = e.target.checked; needsDraw = true; };
+        $("#chk-manual").onchange = (e) => { S.highlightManual = e.target.checked; needsDraw = true; };
         // per-browser preferences, not part of the map document
         function setStampZoom(v, save) {
           v = Math.round(+v);
@@ -5169,6 +5304,12 @@
                <b>Show name on map</b>. Notes have no list of their own — <b>Alt</b>-click, right-click remove or
                <b>Del</b> deletes one, and <b>Show notes</b> (in <b>Options</b>) hides them all. They are separate from the notes field
                on rooms and structures.</p>
+            <h3>Hand-placed markers</h3>
+            <p>Structures, edge structures and stamps whose <b>Type</b> is <code>manual</code> are not generated by the
+               UE importer — someone places them by hand. They get an orange dashed outline and a <b>手</b> badge.
+               Elements with no usable type (<b>未分类</b>) get a red dotted outline and a <b>?</b> badge. Turn on
+               <b>Highlight hand-placed only</b> in <b>Options</b> to fade everything else except rooms. Markers and
+               fading show up in <b>PNG</b> exports exactly as on screen.</p>
             <h3>Right-click</h3>
             <p>Choose what the right mouse button does under <b>Right-click</b> in <b>Options</b>, at the bottom of the right panel.
                <b>Remove</b> works like holding <b>Alt</b> with the current tool — erase cells, clear structure
@@ -5393,6 +5534,7 @@
           $("#chk-structs").checked = S.showStructs;
           $("#chk-slabels").checked = S.showStructLabels;
           $("#chk-notes").checked = S.showNotes;
+          $("#chk-manual").checked = S.highlightManual;
           try { if (localStorage.getItem("mvmap:rclick") === "pan") S.rclick = "pan"; } catch (e) {}
           $("#sel-rclick").value = S.rclick;
           let sz = null;

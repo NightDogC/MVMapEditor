@@ -69,6 +69,14 @@
   const elementTypeOf = (el, layer, types) =>
     (el && el.typeId != null && types.find((t) => t.id === el.typeId && t.layer === layer)) || null;
 
+  /** Map marker for an element the UE importer won't generate: "manual" (placed by hand), "unclassified" (no usable type,
+      so the importer only leaves a placeholder for it too), or null for auto types. */
+  function manualMarkOf(el, layer, types) {
+    const t = elementTypeOf(el, layer, types);
+    if (!t) return "unclassified";
+    return t.generate === "manual" ? "manual" : null;
+  }
+
   /** Document list -> the vocabulary layer its elements use. */
   const ELEMENT_LAYERS = [
     ["structures", "structure"],
@@ -114,6 +122,6 @@
 
   return {
     roomCode, parseRoomNumber, findUeFieldErrors, buildExportDoc, findRegion,
-    typesForLayer, elementTypeOf, migrateTypeIds, defaultElementName, chooseType,
+    typesForLayer, elementTypeOf, migrateTypeIds, defaultElementName, chooseType, manualMarkOf,
   };
 });

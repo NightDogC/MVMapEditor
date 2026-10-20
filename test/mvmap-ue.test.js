@@ -258,3 +258,17 @@ test("chooseType ignores an id that is not a type of the layer, and never mutate
   UE.chooseType(el, "structure", "Door", TYPES);
   assert.deepEqual(el, { name: "Structure 1", color: "#000000", typeId: "Foo" });
 });
+
+test("manualMarkOf marks manual-type elements and leaves auto-type elements unmarked", () => {
+  assert.equal(UE.manualMarkOf({ typeId: "Door" }, "structure", TYPES), "manual");
+  assert.equal(UE.manualMarkOf({ typeId: "Save" }, "stamp", TYPES), "manual");
+  assert.equal(UE.manualMarkOf({ typeId: "Wall" }, "structure", TYPES), null);
+  assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "edge", TYPES), null);
+});
+
+test("manualMarkOf marks elements with no usable type as unclassified: missing, null, unknown, or another layer's type", () => {
+  assert.equal(UE.manualMarkOf({ name: "地图联通" }, "edge", TYPES), "unclassified");
+  assert.equal(UE.manualMarkOf({ typeId: null }, "structure", TYPES), "unclassified");
+  assert.equal(UE.manualMarkOf({ typeId: "Foo" }, "stamp", TYPES), "unclassified");
+  assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "structure", TYPES), "unclassified");
+});
