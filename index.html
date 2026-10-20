@@ -1244,7 +1244,8 @@
         //   rooms/structures/edgeStructs/stamps/keys may carry hideName:true to hide their map label
         //   structures/edgeStructs/stamps may carry typeId: a type id from mvmap-types.js
         //   (null = unclassified: created in the editor, or picked by hand).
-        //   A missing typeId is filled in on load when the name matches a type label (mvmap-ue.js migrateTypeIds);
+        //   A missing typeId is filled in on load when the name matches a type label or old label, and a renamed
+        //   type's old id is replaced by its current id (mvmap-ue.js migrateTypeIds; oldIds/oldLabels in mvmap-types.js);
         //   export writes it only when it is a type of that layer
         function newDoc(name) {
           const a = { id: uid("area"), name: "Area 1", color: AREA_COLORS[0] };

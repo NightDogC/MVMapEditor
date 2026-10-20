@@ -13,7 +13,7 @@ const skip = fs.existsSync(FILE) ? false : "Export/nuosoul.mvmap.json not found"
 
 // layer:name -> expected typeId (null = stays unclassified)
 const EXPECTED = {
-  "structure:墙体": "Wall",
+  "structure:墙体": "Landscape", // exported as typeId "Wall" before the 2026-10-21 rename; migrated by oldIds
   "structure:单向门": "OneWayDoor",
   "structure:隐藏区域": "HiddenArea",
   "structure:刺": "DamageTerrain",

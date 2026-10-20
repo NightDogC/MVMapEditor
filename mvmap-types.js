@@ -29,8 +29,10 @@
 
     /* 元素类型：structure / edgeStruct / stamp 在 Inspector 的"类型"下拉框里从这里选。
        元素的名字只用于显示，UE 导入工具只看 typeId。
-         id       - 导出到 JSON 的 typeId，UE 设置里按它配置对应的类。改名会让已有文件里的元素变成"未分类"
+         id       - 导出到 JSON 的 typeId，UE 设置里按它配置对应的类。改 id 时把旧 id 写进 oldIds，否则已有文件里的元素会变成"未分类"
          label    - 下拉框里显示的名字。旧文件里没有 typeId 的元素，名字和它完全一致时自动归为这个类型
+         oldIds    - （可选）这个类型以前用过的 id。加载文件时，typeId 是旧 id 的元素自动改成新 id
+         oldLabels - （可选）以前用过的显示名。没有 typeId 的旧元素，名字和它完全一致时也归为这个类型
          layer    - 适用图层：structure（格子）/ edge（格边）/ stamp（单格标记）。下拉框只列出当前图层的类型
          generate - auto：导入时生成对应的项目类；manual：只生成占位标记，由人工摆放
          color / emoji - 新建元素（名字还是 "Structure 1" 这类默认名、还没选过类型）选这个类型时，
@@ -38,7 +40,7 @@
        不在这里的名字（如"地图联通"）加载后显示"未分类"，导出时不写 typeId。 */
     types: [
       // ── structure ──
-      { id: "Wall", label: "墙体", layer: "structure", generate: "auto", color: "#7c879b", emoji: "🧱" }, // 生成 BP_Ground，矩形合并
+      { id: "Landscape", label: "地形", layer: "structure", generate: "auto", color: "#7c879b", emoji: "🧱", oldIds: ["Wall"], oldLabels: ["墙体"] }, // 生成 BP_Ground，矩形合并（2026-10-21 由 Wall/墙体 改名）
       { id: "DamageTerrain", label: "刺", layer: "structure", generate: "auto", color: "#e0555f", emoji: "⚠️" }, // 生成 BP_Trap_DamageTerrainVolume
       { id: "OneWayDoor", label: "单向门", layer: "structure", generate: "manual", color: "#c9885a", emoji: "🚪" }, // 人工摆放
       { id: "HiddenArea", label: "隐藏区域", layer: "structure", generate: "manual", color: "#a97af0", emoji: "🕳️" }, // 人工摆放，对应的 MapVolume .01 也不自动生成

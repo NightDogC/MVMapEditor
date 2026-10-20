@@ -29,15 +29,20 @@ test("every element type has a unique id, a known layer and generate mode, a col
   }
 });
 
-test("labels are unique within a layer, so a name can only ever match one type", () => {
+test("labels, old labels included, are unique within a layer, so a name can only ever match one type", () => {
   for (const layer of ["structure", "edge", "stamp"]) {
-    const labels = TYPES.types.filter((t) => t.layer === layer).map((t) => t.label);
+    const labels = TYPES.types.filter((t) => t.layer === layer).flatMap((t) => [t.label, ...(t.oldLabels || [])]);
     assert.equal(new Set(labels).size, labels.length, layer);
   }
 });
 
-test("the importer's auto types are Wall, DamageTerrain (structures) and JumpOffPlatform (edges); every stamp is manual", () => {
+test("old ids never clash with a current id or another type's old id, so a renamed id migrates to exactly one type", () => {
+  const ids = TYPES.types.flatMap((t) => [t.id, ...(t.oldIds || [])]);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("the importer's auto types are Landscape, DamageTerrain (structures) and JumpOffPlatform (edges); every stamp is manual", () => {
   const auto = TYPES.types.filter((t) => t.generate === "auto").map((t) => `${t.layer}:${t.id}`).sort();
-  assert.deepEqual(auto, ["edge:JumpOffPlatform", "structure:DamageTerrain", "structure:Wall"]);
+  assert.deepEqual(auto, ["edge:JumpOffPlatform", "structure:DamageTerrain", "structure:Landscape"]);
   assert.ok(TYPES.types.some((t) => t.layer === "stamp"));
 });

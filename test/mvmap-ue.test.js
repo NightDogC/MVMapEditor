@@ -196,6 +196,35 @@ test("migrateTypeIds leaves the input untouched and copes with documents that la
   assert.deepEqual(UE.migrateTypeIds({ name: "Empty" }, TYPES), { name: "Empty" });
 });
 
+const RENAMED_TYPES = [
+  { id: "Landscape", label: "Landscape label", layer: "structure", generate: "auto", color: "#111111", emoji: "W", oldIds: ["Wall"], oldLabels: ["Wall label"] },
+  { id: "Ledge", label: "Ledge label", layer: "edge", generate: "auto", color: "#333333", emoji: "L" },
+];
+
+test("migrateTypeIds moves a renamed type's old id to its current id, on that type's own layer only", () => {
+  const d = {
+    structures: [
+      { id: "s1", name: "x", typeId: "Wall", cells: [] },
+      { id: "s2", name: "x", typeId: "Gone", cells: [] },
+      { id: "s3", name: "x", typeId: null, cells: [] },
+    ],
+    edgeStructs: [{ id: "e1", name: "x", typeId: "Wall", edges: [] }],
+  };
+  const out = UE.migrateTypeIds(d, RENAMED_TYPES);
+  assert.equal(out.structures[0].typeId, "Landscape");
+  assert.equal(out.structures[1].typeId, "Gone"); // unknown, not an old id
+  assert.equal(out.structures[2].typeId, null); // 未分类 picked by hand stays
+  assert.equal(out.edgeStructs[0].typeId, "Wall"); // no edge type was renamed from Wall
+});
+
+test("migrateTypeIds classifies an untyped element by a type's current or old label", () => {
+  const d = { structures: [{ id: "s1", name: "Wall label", cells: [] }, { id: "s2", name: "Landscape label", cells: [] }] };
+  const out = UE.migrateTypeIds(d, RENAMED_TYPES);
+  assert.equal(out.structures[0].typeId, "Landscape");
+  assert.equal(out.structures[1].typeId, "Landscape");
+  assert.equal(out.structures[0].name, "Wall label"); // the name is display only and is kept
+});
+
 test("buildExportDoc writes typeId only when it is a type of the element's own layer", () => {
   const d = typedDoc();
   d.structures[0].typeId = "Wall";

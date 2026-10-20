@@ -84,15 +84,22 @@
     ["stamps", "stamp"],
   ];
 
-  /** Copy of the document where every element without a typeId field gets one if its name is exactly a type label of its layer.
-      Existing typeIds are kept as-is, including ones the vocabulary doesn't know and null (created in the editor, or 未分类 picked by hand). */
+  /** Copy of the document where
+      - every element whose typeId is a renamed type's old id (its `oldIds`, same layer) gets the current id;
+      - every element without a typeId field gets one if its name is exactly a type label, or an old label (`oldLabels`), of its layer.
+      Other typeIds are kept as-is, including ones the vocabulary doesn't know and null (created in the editor, or 未分类 picked by hand). */
   function migrateTypeIds(doc, types) {
     const out = JSON.parse(JSON.stringify(doc));
     for (const [list, layer] of ELEMENT_LAYERS) {
+      const layerTypes = typesForLayer(types, layer);
       for (const el of out[list] || []) {
-        if (el.typeId !== undefined) continue;
-        const t = types.find((x) => x.layer === layer && x.label === el.name);
-        if (t) el.typeId = t.id;
+        if (el.typeId === undefined) {
+          const t = layerTypes.find((x) => x.label === el.name || (x.oldLabels || []).includes(el.name));
+          if (t) el.typeId = t.id;
+        } else if (el.typeId != null && !layerTypes.some((x) => x.id === el.typeId)) {
+          const renamed = layerTypes.find((x) => (x.oldIds || []).includes(el.typeId));
+          if (renamed) el.typeId = renamed.id;
+        }
       }
     }
     return out;
