@@ -384,6 +384,17 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .row.untyped .nm {
+        color: var(--danger);
+      }
+      .untyped-tag {
+        font-size: 10px;
+        color: var(--danger);
+        border: 1px solid var(--danger);
+        border-radius: 3px;
+        padding: 0 3px;
+        white-space: nowrap;
+      }
       .sub {
         font-size: 10.5px;
         color: var(--tx-mute);
@@ -643,6 +654,9 @@
       .meta {
         font-size: 11px;
         color: var(--tx-mute);
+      }
+      .meta.err {
+        color: var(--danger);
       }
 
       /* ── Detail overlay ────────────────────────────────────────── */
@@ -1008,6 +1022,9 @@
           <label class="check"><input type="checkbox" id="chk-structs" checked /><span>Show structures</span></label>
           <label class="check"><input type="checkbox" id="chk-slabels" checked /><span>Show structure names</span></label>
           <label class="check"><input type="checkbox" id="chk-notes" checked /><span>Show notes</span></label>
+          <label class="check" title="Fade everything except the structures, edges and stamps the UE importer leaves for hand placement (manual or 未分类)"
+            ><input type="checkbox" id="chk-manual" /><span>Highlight hand-placed only</span></label
+          >
           <label class="inline opt-row" title="Stamp names appear once the map is zoomed in further than this">Stamp labels above zoom
             <span class="num-wrap"><input type="number" id="num-stampzoom" min="10" max="800" step="5" value="60" />%</span>
           </label>
@@ -1057,9 +1074,15 @@
     <input type="file" id="file-input" accept="application/json,.json" hidden />
     <input type="file" id="keys-input" accept="application/json,.json" hidden />
 
+    <script src="mvmap-types.js"></script>
+    <script src="mvmap-ue.js"></script>
     <script>
       "use strict";
       (function () {
+        if (!window.MVMapTypes || !window.MVMapUE) alert("mvmap-types.js / mvmap-ue.js not found — keep them in the same folder as index.html.");
+        const UE = window.MVMapUE;
+        const REGIONS = window.MVMapTypes.regions;
+        const ELEMENT_TYPES = window.MVMapTypes.types;
         /* ══════════════════════════════════════════════════════════════
            1 · Utilities
            ══════════════════════════════════════════════════════════════ */
@@ -1204,7 +1227,9 @@
         /* ══════════════════════════════════════════════════════════════
            3 · Document model
            ══════════════════════════════════════════════════════════════ */
-        // doc.rooms[]  { id, name, areaId, color|null, notes, cells:["x,y",…] }
+        // doc.areas[]  { id, name, color, region? }  region: ENSRegionList enum name from mvmap-types.js
+        // doc.rooms[]  { id, name, areaId, color|null, notes, cells:["x,y",…], number? }  number: positive int, unique per area
+        //   export (mvmap-ue.js buildExportDoc) always writes area.region/area.letter/room.number, null when unset
         // doc.doors[]  { id, x, y, o:"v"|"h", kind:"passage"|"door"|"oneway", dir:1|-1, lockId|null }
         //              a "v" edge at (x,y) divides cells (x-1,y) | (x,y)
         //              an "h" edge at (x,y) divides cells (x,y-1) / (x,y)
@@ -1217,6 +1242,11 @@
         // doc.notes[]       { id, name, text, color, x, y, expanded, box?:{dx,dy} } a standalone annotation on one
         //                   cell, above stamps; box is the open panel's offset from its default spot, in screen px
         //   rooms/structures/edgeStructs/stamps/keys may carry hideName:true to hide their map label
+        //   structures/edgeStructs/stamps may carry typeId: a type id from mvmap-types.js
+        //   (null = unclassified: created in the editor, or picked by hand).
+        //   A missing typeId is filled in on load when the name matches a type label or old label, and a renamed
+        //   type's old id is replaced by its current id (mvmap-ue.js migrateTypeIds; oldIds/oldLabels in mvmap-types.js);
+        //   export writes it only when it is a type of that layer
         function newDoc(name) {
           const a = { id: uid("area"), name: "Area 1", color: AREA_COLORS[0] };
           return {
@@ -1276,7 +1306,7 @@
             s.edges = Array.isArray(s.edges) ? s.edges : [];
             if (typeof s.notes !== "string") s.notes = "";
           });
-          return d;
+          return UE.migrateTypeIds(d, ELEMENT_TYPES);
         }
 
         /* ══════════════════════════════════════════════════════════════
@@ -1297,6 +1327,7 @@
           showStructs: true,
           showStructLabels: true,
           showNotes: true,
+          highlightManual: false, // fade everything but the elements the UE importer leaves for hand placement
           rclick: "remove", // right mouse button: "remove" (like Alt) | "pan" (hold and drag)
           stampZoom: 60, // stamp names show once the zoom is above this percentage
           hoverCell: null,
@@ -1761,7 +1792,7 @@
         /* ── Structures (cell layer over rooms) ───────────────────── */
         function createStruct() {
           const n = S.doc.structures.length;
-          const s = { id: uid("struct"), name: "Structure " + (n + 1), color: STRUCT_COLORS[n % STRUCT_COLORS.length], notes: "", cells: [] };
+          const s = { id: uid("struct"), name: UE.defaultElementName("structure", n + 1), color: STRUCT_COLORS[n % STRUCT_COLORS.length], notes: "", cells: [], typeId: null };
           S.doc.structures.push(s);
           S.activeStructId = s.id;
           return s;
@@ -1802,7 +1833,7 @@
         /* ── Edge structures (thick grid edges, e.g. platforms) ────── */
         function createEdgeStruct() {
           const n = S.doc.edgeStructs.length;
-          const s = { id: uid("edge"), name: "Platform " + (n + 1), color: STRUCT_COLORS[(n + 4) % STRUCT_COLORS.length], notes: "", edges: [] };
+          const s = { id: uid("edge"), name: UE.defaultElementName("edge", n + 1), color: STRUCT_COLORS[(n + 4) % STRUCT_COLORS.length], notes: "", edges: [], typeId: null };
           S.doc.edgeStructs.push(s);
           S.activeEdgeId = s.id;
           return s;
@@ -1844,11 +1875,12 @@
           const n = S.doc.stamps.length;
           const s = {
             id: uid("stamp"),
-            name: "Stamp " + (n + 1),
+            name: UE.defaultElementName("stamp", n + 1),
             emoji: STAMP_EMOJI[n % STAMP_EMOJI.length],
             color: STRUCT_COLORS[(n + 5) % STRUCT_COLORS.length],
             notes: "",
             cells: [],
+            typeId: null,
           };
           S.doc.stamps.push(s);
           S.activeStampId = s.id;
@@ -2356,6 +2388,7 @@
           }
           for (const st of S.doc.structures) {
             if (!st.cells.length) continue;
+            ctx.globalAlpha = markAlpha(st, "structure");
             const col = structColor(st);
             const set = new Set(st.cells);
             const isActive = st.id === S.activeStructId;
@@ -2388,6 +2421,7 @@
               strokeSilhouette(ctx, V, hl, hl);
             }
           }
+          ctx.globalAlpha = 1;
         }
 
         const edgeThickness = (z) => clamp(CELL * z * 0.16, 2.5, 9);
@@ -2414,6 +2448,7 @@
           ctx.lineJoin = "round";
           for (const es of S.doc.edgeStructs) {
             if (!es.edges.length) continue;
+            ctx.globalAlpha = markAlpha(es, "edge");
             const col = structColor(es);
             const lit = es.id === selId ? [...pc.keys] : null; // just the selected piece glows
             if (lit) {
@@ -2454,6 +2489,7 @@
             if (st.hideName) continue;
             const b = cellsBBox(st.cells);
             if (!b) continue;
+            ctx.globalAlpha = markAlpha(st, "structure");
             label(st.name, structColor(st), V.sx((b.x0 + b.w / 2) * CELL), V.sy((b.y0 + b.h / 2) * CELL));
           }
           for (const es of S.doc.edgeStructs) {
@@ -2469,8 +2505,10 @@
             const off = edgeThickness(z) / 2 + fs / 2 + 4;
             const cx = V.sx(m.x) + (e.o === "v" ? off + ctx.measureText(es.name).width / 2 : 0);
             const cy = V.sy(m.y) - (e.o === "h" ? off : 0);
+            ctx.globalAlpha = markAlpha(es, "edge");
             label(es.name, structColor(es), cx, cy);
           }
+          ctx.globalAlpha = 1;
         }
 
         function drawDoors(ctx, V) {
@@ -2753,6 +2791,8 @@
           for (const st of S.doc.stamps) {
             const col = structColor(st);
             const isSel = st.id === selId;
+            const alpha = markAlpha(st, "stamp");
+            ctx.globalAlpha = alpha;
             for (const c of st.cells) {
               const [x, y] = unck(c);
               const px = V.sx(x * CELL), py = V.sy(y * CELL);
@@ -2772,7 +2812,7 @@
                 ctx.fillStyle = "#ffffff";
                 ctx.fillText(st.emoji, cx, cy + s * 0.04);
               }
-              if (showNames && !st.hideName && st.name) labels.push({ text: st.name, col, cx, top: py, bottom: py + s });
+              if (showNames && !st.hideName && st.name) labels.push({ text: st.name, col, alpha, cx, top: py, bottom: py + s });
             }
           }
 
@@ -2788,6 +2828,7 @@
             const box = !hits(below) ? below : !hits(above) ? above : null;
             if (!box) continue;
             placed.push(box);
+            ctx.globalAlpha = l.alpha;
             ctx.fillStyle = "rgba(10,12,16,0.72)";
             ctx.fillRect(box.x, box.y, box.w, box.h);
             ctx.fillStyle = shade(l.col, 0.3);
@@ -2989,6 +3030,118 @@
           ctx.restore();
         }
 
+        /* Elements the UE importer won't generate (manual types, and 未分类 ones) get a dashed outline and a badge
+           in the cell nearest the top-left; "Highlight hand-placed only" fades everything else. */
+        const MARK_STYLE = {
+          manual: { color: "#ffb02e", glyph: "手", dash: [6, 4] },
+          unclassified: { color: "#ff4d5e", glyph: "?", dash: [2, 3] },
+        };
+        const MARK_FADE = 0.18;
+        const markOf = (it, layer) => UE.manualMarkOf(it, layer, ELEMENT_TYPES);
+        /** Draw alpha for an element: faded when highlighting hand-placed elements and this one is generated. */
+        const markAlpha = (it, layer) => (S.highlightManual && !markOf(it, layer) ? MARK_FADE : 1);
+
+        /** Cell key of the top-most, then left-most cell. */
+        function topLeftCell(cells) {
+          let best = null, bx = 0, by = 0;
+          for (const c of cells) {
+            const [x, y] = unck(c);
+            if (best === null || y < by || (y === by && x < bx)) { best = c; bx = x; by = y; }
+          }
+          return best;
+        }
+
+        /** Split `keys` into connected pieces, using cellComponent or edgeComponent as `componentOf`. */
+        function connectedPieces(keys, componentOf) {
+          const seen = new Set(), out = [];
+          for (const k of keys) {
+            if (seen.has(k)) continue;
+            const piece = componentOf(keys, k);
+            for (const p of piece) seen.add(p);
+            out.push(piece);
+          }
+          return out;
+        }
+
+        function drawMarkBadge(ctx, V, mark, cx, cy, r) {
+          if (cx < -r || cy < -r || cx > V.w + r || cy > V.h + r) return;
+          const m = MARK_STYLE[mark];
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fillStyle = m.color;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "rgba(8,10,14,0.9)";
+          ctx.stroke();
+          ctx.fillStyle = "#12151b";
+          ctx.font = `700 ${Math.round(r * 1.25)}px ${FONTF}`;
+          ctx.fillText(m.glyph, cx, cy + 0.5);
+        }
+
+        function drawManualMarks(ctx, V) {
+          const z = V.cam.zoom, s = CELL * z;
+          const marked = []; // only the elements that get a marker
+          const collect = (layer, it, size) => {
+            const mark = size ? markOf(it, layer) : null;
+            if (mark) marked.push({ layer, it, mark });
+          };
+          for (const st of S.doc.structures) collect("structure", st, st.cells.length);
+          for (const es of S.doc.edgeStructs) collect("edge", es, es.edges.length);
+          for (const st of S.doc.stamps) collect("stamp", st, st.cells.length);
+
+          ctx.save();
+          // outlines: a dark dashed underlay keeps the dashes readable over any fill colour
+          ctx.lineCap = "butt";
+          const lw = Math.max(2, edgeThickness(z) * 0.45);
+          for (const { layer, it, mark } of marked) {
+            const style = MARK_STYLE[mark];
+            ctx.setLineDash(style.dash);
+            for (const [col, w] of [["rgba(8,10,14,0.85)", lw + 2], [style.color, lw]]) {
+              ctx.strokeStyle = col;
+              ctx.lineWidth = w;
+              if (layer === "structure") strokeSilhouette(ctx, V, it.cells, new Set(it.cells));
+              else if (layer === "edge") strokeEdgeKeys(ctx, V, it.edges);
+              else {
+                const pad = Math.max(1, s * 0.08);
+                for (const c of it.cells) {
+                  const [x, y] = unck(c);
+                  const px = V.sx(x * CELL), py = V.sy(y * CELL);
+                  if (px > V.w || py > V.h || px + s < 0 || py + s < 0) continue;
+                  roundRect(ctx, px + pad, py + pad, s - pad * 2, s - pad * 2, Math.min(6, s * 0.18));
+                  ctx.stroke();
+                }
+              }
+            }
+          }
+          ctx.setLineDash([]);
+
+          // badges on top of every outline: one per connected piece (the unit Select picks), one per stamp cell
+          if (s >= 8) {
+            const r = clamp(s * 0.22, 5, 9), inset = r * 0.35;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (const { layer, it, mark } of marked) {
+              if (layer === "edge") {
+                for (const piece of connectedPieces(it.edges, edgeComponent)) {
+                  let bx = Infinity, by = Infinity;
+                  for (const k of piece) {
+                    const [x0, y0] = edgeEnds(unek(k)); // the start is the top / left end
+                    if (y0 < by || (y0 === by && x0 < bx)) { bx = x0; by = y0; }
+                  }
+                  drawMarkBadge(ctx, V, mark, V.sx(bx), V.sy(by), r);
+                }
+              } else {
+                const cells = layer === "stamp" ? it.cells : connectedPieces(it.cells, cellComponent).map(topLeftCell);
+                for (const c of cells) {
+                  const [x, y] = unck(c);
+                  drawMarkBadge(ctx, V, mark, V.sx(x * CELL) + inset, V.sy(y * CELL) + inset, r);
+                }
+              }
+            }
+          }
+          ctx.restore();
+        }
+
         function drawWorld(ctx, V, opts) {
           opts = opts || {};
           ctx.save();
@@ -3002,11 +3155,20 @@
           }
           if (opts.labels !== undefined ? opts.labels : S.showLabels) drawRoomLabels(ctx, V);
           if (S.showStructs && S.showStructLabels) drawStructLabels(ctx, V);
+          // rooms stay at full strength as the frame of reference; locks, keys and notes fade with generated elements
+          const fade = S.highlightManual ? MARK_FADE : 1;
+          ctx.globalAlpha = fade;
           drawFlow(ctx, V);
           drawDoors(ctx, V);
           drawKeys(ctx, V);
-          if (S.showStructs) drawStamps(ctx, V);
+          ctx.globalAlpha = 1;
+          if (S.showStructs) {
+            drawStamps(ctx, V);
+            drawManualMarks(ctx, V);
+          }
+          ctx.globalAlpha = fade;
           if (S.showNotes) drawNotes(ctx, V);
+          ctx.globalAlpha = 1;
           if (opts.cursor !== false) drawCursor(ctx, V);
           ctx.restore();
         }
@@ -3793,6 +3955,10 @@
             .join("");
         }
 
+        /** List row extras for an element with no usable type: a class that turns its name red, and a "未分类" tag. */
+        const untyped = (it, layer) => !UE.elementTypeOf(it, layer, ELEMENT_TYPES);
+        const untypedTag = (it, layer) => (untyped(it, layer) ? `<span class="untyped-tag">未分类</span>` : "");
+
         function renderStructs() {
           const host = $("#struct-list");
           $("#struct-count").textContent = S.doc.structures.length;
@@ -3803,9 +3969,10 @@
           const selId = S.sel && S.sel.type === "struct" ? S.sel.id : null;
           host.innerHTML = S.doc.structures
             .map(
-              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-struct="${s.id}">
+              (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "structure") ? "untyped" : ""}" data-struct="${s.id}">
                   <span class="swatch" style="background:${structColor(s)}"></span>
                   <span class="nm">${esc(s.name)}${s.id === S.activeStructId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  ${untypedTag(s, "structure")}
                   <span class="sub">${s.cells.length}</span>
                 </div>`
             )
@@ -3822,9 +3989,10 @@
           const selId = S.sel && S.sel.type === "edge" ? S.sel.id : null;
           host.innerHTML = S.doc.edgeStructs
             .map(
-              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-edge="${s.id}">
+              (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "edge") ? "untyped" : ""}" data-edge="${s.id}">
                   <span class="swatch" style="background:${structColor(s)};height:4px;border-radius:2px"></span>
                   <span class="nm">${esc(s.name)}${s.id === S.activeEdgeId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  ${untypedTag(s, "edge")}
                   <span class="sub">${s.edges.length}</span>
                 </div>`
             )
@@ -3841,9 +4009,10 @@
           const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
           host.innerHTML = S.doc.stamps
             .map(
-              (s) => `<div class="row ${s.id === selId ? "on" : ""}" data-stamp="${s.id}">
+              (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "stamp") ? "untyped" : ""}" data-stamp="${s.id}">
                   <span class="emo">${esc(s.emoji)}</span>
                   <span class="nm">${esc(s.name)}${s.id === S.activeStampId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
+                  ${untypedTag(s, "stamp")}
                   <span class="sub">${s.cells.length}</span>
                 </div>`
             )
@@ -3916,9 +4085,18 @@
             .map((c) => `<button class="chip ${c === current ? "on" : ""}" style="background:${c}" data-${attr}="${c}"></button>`)
             .join("")}</div>`;
 
+        /** Inline warning under the room number: another room in the same area already uses it. */
+        function numberWarning(r) {
+          if (r.number == null) return "";
+          const twins = S.doc.rooms.filter((o) => o !== r && o.areaId === r.areaId && o.number === r.number);
+          return twins.length ? `Also used by ${twins.map((o) => `“${esc(o.name)}”`).join(", ")} in this area` : "";
+        }
+
         function inspectRoom(host, r) {
           const b = roomBBox(r);
           const det = S.doc.detail[r.id];
+          const area = areaById(r.areaId);
+          const region = UE.findRegion(REGIONS, area.region);
           host.innerHTML = `
             <div class="insp-title"><span class="swatch" style="background:${roomColor(r)}"></span>
               <span class="kind">Room</span></div>
@@ -3937,6 +4115,16 @@
             <div class="fld"><label>Area</label><select id="i-area">${S.doc.areas
               .map((a) => `<option value="${a.id}" ${a.id === r.areaId ? "selected" : ""}>${esc(a.name)}</option>`)
               .join("")}</select></div>
+            <div class="fld"><label>Region (whole area “${esc(area.name)}”)</label><select id="i-region">
+              <option value="">— not set —</option>
+              ${area.region != null && !region ? `<option value="${esc(area.region)}" selected>unknown: ${esc(area.region)}</option>` : ""}
+              ${REGIONS.map((g) => `<option value="${g.region}" ${g.region === area.region ? "selected" : ""}>${esc(g.label)}</option>`).join("")}
+            </select></div>
+            <div class="fld"><label>Number in area</label>
+              <input type="text" id="i-number" inputmode="numeric" value="${r.number == null ? "" : esc(String(r.number))}" placeholder="1, 2, 3…" />
+              <div class="meta err" id="i-number-err">${numberWarning(r)}</div>
+              <div class="meta">Code: ${UE.roomCode(region && region.letter, r.number) || "—"}</div>
+            </div>
             <div class="fld"><label>Colour override</label>
               ${colorChips(AREA_COLORS, r.color, "color")}
               <button class="btn" id="i-clear-color" style="margin-top:4px">Use area colour</button>
@@ -3953,6 +4141,27 @@
           $("#i-name").oninput = (e) => { r.name = e.target.value; needsDraw = true; renderRooms(); scheduleSave(); };
           undoOnFocus($("#i-name"), $("#i-notes"));
           $("#i-area").onchange = (e) => { pushUndo(); r.areaId = e.target.value; S.activeAreaId = r.areaId; commit(); };
+          $("#i-region").onchange = (e) => {
+            pushUndo();
+            if (e.target.value) area.region = e.target.value;
+            else delete area.region;
+            commit();
+          };
+          // live parse error while typing; otherwise keep showing the stored number's duplicate warning
+          $("#i-number").oninput = (e) => { $("#i-number-err").innerHTML = esc(UE.parseRoomNumber(e.target.value).error || "") || numberWarning(r); };
+          $("#i-number").onchange = (e) => {
+            const p = UE.parseRoomNumber(e.target.value);
+            if (p.error) {
+              // keep the stored value; leave the message up so it's clear why the field snapped back
+              e.target.value = r.number == null ? "" : String(r.number);
+              $("#i-number-err").textContent = p.error + " — kept the previous value";
+              return;
+            }
+            pushUndo();
+            if (p.value == null) delete r.number;
+            else r.number = p.value;
+            commit();
+          };
           $("#i-notes").oninput = (e) => { r.notes = e.target.value; scheduleSave(); };
           $("#i-clear-color").onclick = () => { pushUndo(); r.color = null; commit(); };
           $("#i-detail").onclick = () => openDetail(r.id);
@@ -4113,6 +4322,32 @@
           $("#i-del").onclick = () => { pushUndo(); deleteLock(l.id); commit(); };
         }
 
+        /** "Type" dropdown for structures, edge structures and stamps; only the types of `layer` are offered. */
+        function typeField(it, layer) {
+          const cur = UE.elementTypeOf(it, layer, ELEMENT_TYPES);
+          const unknown = it.typeId != null && !cur;
+          const hint = cur
+            ? cur.generate === "auto" ? "UE import generates this element" : "UE import leaves a placeholder — placed by hand"
+            : unknown ? "Not a type of this layer in mvmap-types.js — counts as 未分类" : "未分类 — pick a type for the UE importer";
+          return `<div class="fld"><label>Type</label><select id="i-type">
+              <option value="" ${cur || unknown ? "" : "selected"}>— 未分类 —</option>
+              ${unknown ? `<option value="${esc(it.typeId)}" selected>unknown: ${esc(it.typeId)}</option>` : ""}
+              ${UE.typesForLayer(ELEMENT_TYPES, layer)
+                .map((t) => `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(t.label)} · ${t.generate}</option>`)
+                .join("")}
+            </select>
+            <div class="meta ${cur ? "" : "err"}">${hint}</div></div>`;
+        }
+        function bindTypeField(it, layer) {
+          $("#i-type").onchange = (e) => {
+            const next = UE.chooseType(it, layer, e.target.value, ELEMENT_TYPES);
+            if (next.typeId === it.typeId) return; // re-picked the current or the "unknown" entry
+            pushUndo();
+            Object.assign(it, next);
+            commit();
+          };
+        }
+
         /** Shared inspector for structures and edge structures — both are a named, coloured set. */
         function inspectLayerItem(host, it, isEdge) {
           if (!it) return;
@@ -4129,6 +4364,7 @@
             <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(it.name)}" placeholder="${
               isEdge ? "One-way platform, ledge…" : "Breakable wall, hidden wall, lever…"
             }" /></div>
+            ${typeField(it, isEdge ? "edge" : "structure")}
             <div class="fld"><label>Colour</label>${colorChips(STRUCT_COLORS, it.color, "scolor")}
               <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#b8c0cc"}" /><span>Custom colour</span></div>
             </div>
@@ -4147,6 +4383,7 @@
           const refreshList = () => (isEdge ? renderEdgeStructs() : renderStructs());
           $("#i-name").oninput = (e) => { it.name = e.target.value; needsDraw = true; refreshList(); scheduleSave(); };
           $("#i-notes").oninput = (e) => { it.notes = e.target.value; scheduleSave(); };
+          bindTypeField(it, isEdge ? "edge" : "structure");
           undoOnFocus($("#i-name"), $("#i-notes"), $("#i-ccolor"));
           host.querySelectorAll("[data-scolor]").forEach((b2) => {
             b2.onclick = () => { pushUndo(); it.color = b2.dataset.scolor; commit(); };
@@ -4210,6 +4447,7 @@
           host.innerHTML = `
             <div class="insp-title"><span class="emo">${esc(st.emoji)}</span><span class="kind">Stamp</span></div>
             <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(st.name)}" placeholder="Save point, boss, chest…" /></div>
+            ${typeField(st, "stamp")}
             <div class="fld"><label>Emoji</label>
               <input type="text" id="i-emoji" value="${esc(st.emoji)}" placeholder="One emoji (Win + .)" autocomplete="off" spellcheck="false" />
               <div class="emoji-grid" style="margin-top:4px">${STAMP_EMOJI.map(
@@ -4231,6 +4469,7 @@
 
           $("#i-name").oninput = (e) => { st.name = e.target.value; needsDraw = true; renderStamps(); scheduleSave(); };
           $("#i-notes").oninput = (e) => { st.notes = e.target.value; scheduleSave(); };
+          bindTypeField(st, "stamp");
           // exactly one emoji: typing or pasting replaces the current one, anything else is dropped
           const emo = $("#i-emoji");
           emo.addEventListener("focus", () => emo.select());
@@ -4405,6 +4644,7 @@
         $("#chk-structs").onchange = (e) => { S.showStructs = e.target.checked; needsDraw = true; };
         $("#chk-slabels").onchange = (e) => { S.showStructLabels = e.target.checked; needsDraw = true; };
         $("#chk-notes").onchange = (e) => { S.showNotes = e.target.checked; needsDraw = true; };
+        $("#chk-manual").onchange = (e) => { S.highlightManual = e.target.checked; needsDraw = true; };
         // per-browser preferences, not part of the map document
         function setStampZoom(v, save) {
           v = Math.round(+v);
@@ -4925,9 +5165,12 @@
         /* ══════════════════════════════════════════════════════════════
            15 · Import / export
            ══════════════════════════════════════════════════════════════ */
+        const ueErrorText = (errs) => "Region / room number problems (the UE importer will reject these rooms):\n\n• " + errs.join("\n• ");
         function exportJSON() {
+          const errs = UE.findUeFieldErrors(S.doc, REGIONS);
+          if (errs.length && !confirm(ueErrorText(errs) + "\n\nExport anyway?")) return;
           S.doc.updated = Date.now();
-          const blob = new Blob([JSON.stringify(S.doc, null, 2)], { type: "application/json" });
+          const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS, ELEMENT_TYPES), null, 2)], { type: "application/json" });
           saveBlob(blob, slug(S.doc.name) + ".mvmap.json");
         }
         $("#btn-export").onclick = exportJSON;
@@ -4992,6 +5235,9 @@
           $("#map-name").value = S.doc.name;
           commit();
           fitWorld();
+          const errs = UE.findUeFieldErrors(S.doc, REGIONS);
+          // after the map has had a chance to draw, so the user can see what the message is about
+          if (errs.length) setTimeout(() => alert(ueErrorText(errs)), 50);
         }
         $("#btn-new").onclick = () => {
           if ((S.doc.rooms.length || S.doc.structures.length || S.doc.edgeStructs.length) && !confirm("Start a new map? The current one stays saved in your library.")) return;
@@ -5059,6 +5305,12 @@
                <b>Show name on map</b>. Notes have no list of their own — <b>Alt</b>-click, right-click remove or
                <b>Del</b> deletes one, and <b>Show notes</b> (in <b>Options</b>) hides them all. They are separate from the notes field
                on rooms and structures.</p>
+            <h3>Hand-placed markers</h3>
+            <p>Structures, edge structures and stamps whose <b>Type</b> is <code>manual</code> are not generated by the
+               UE importer — someone places them by hand. They get an orange dashed outline and a <b>手</b> badge.
+               Elements with no usable type (<b>未分类</b>) get a red dotted outline and a <b>?</b> badge. Turn on
+               <b>Highlight hand-placed only</b> in <b>Options</b> to fade everything else except rooms. Markers and
+               fading show up in <b>PNG</b> exports exactly as on screen.</p>
             <h3>Right-click</h3>
             <p>Choose what the right mouse button does under <b>Right-click</b> in <b>Options</b>, at the bottom of the right panel.
                <b>Remove</b> works like holding <b>Alt</b> with the current tool — erase cells, clear structure
@@ -5283,6 +5535,7 @@
           $("#chk-structs").checked = S.showStructs;
           $("#chk-slabels").checked = S.showStructLabels;
           $("#chk-notes").checked = S.showNotes;
+          $("#chk-manual").checked = S.highlightManual;
           try { if (localStorage.getItem("mvmap:rclick") === "pan") S.rclick = "pan"; } catch (e) {}
           $("#sel-rclick").value = S.rclick;
           let sz = null;

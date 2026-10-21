@@ -4,7 +4,7 @@ Forked from https://github.com/TitaniumCladStudios/MVMap
 
 A metroidvania map editor. Paint rooms onto grid paper, colour them by area, connect them with doors, and model progression with locks and keys — then grey-box the inside of any room without leaving the tool.
 
-It's a single self-contained `index.html`. No build step, no dependencies, no server, no account.
+It's a plain `index.html` plus two small scripts next to it (`mvmap-types.js`, `mvmap-ue.js`). No build step, no dependencies, no server, no account.
 
 Built to design an unannounced metroidvania.
 
@@ -12,7 +12,7 @@ Built to design an unannounced metroidvania.
 
 ## Running it
 
-Double-click `index.html`. That's it.
+Double-click `index.html`. That's it. Keep `mvmap-types.js` and `mvmap-ue.js` in the same folder — the editor warns and stops working without them.
 
 For real IndexedDB storage instead of the localStorage fallback, serve it over HTTP:
 
@@ -25,7 +25,7 @@ Chrome denies IndexedDB to `file://` pages, so opening the file directly falls b
 
 ### Deploying
 
-Commit `index.html` to a repo and enable GitHub Pages on the branch. There's nothing to configure — the file is fully self-contained, and Pages serves over HTTPS so you get proper IndexedDB.
+Commit `index.html`, `mvmap-types.js` and `mvmap-ue.js` to a repo and enable GitHub Pages on the branch. There's nothing to configure, and Pages serves over HTTPS so you get proper IndexedDB.
 
 ---
 
@@ -65,7 +65,9 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. Drag the open box anywhere (in any tool, Pan included); it keeps that spot after collapsing and reopening, and **Reset box position** in the Inspector puts it back beside the note. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
 
-**Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
+**Hand-placed markers** — structures, edge structures and stamps the UE importer won't generate get a marker: `manual` types an orange dashed outline and a **手** badge, 未分类 ones a red dotted outline and a **?** badge. Each connected piece gets its own badge (stamps: every cell); badges hide when cells are under 8 px on screen. **Highlight hand-placed only** in Options fades everything else except rooms. PNG export shows markers and fading as on screen.
+
+**Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
 **Right-click** — configurable under Options. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
@@ -143,7 +145,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
   "updated": 1753660800000,
 
   "areas": [
-    { "id": "area_x1", "name": "Sunken Cistern", "color": "#4c8dd8" }
+    { "id": "area_x1", "name": "Sunken Cistern", "color": "#4c8dd8",
+      "region": "XianZuCi", "letter": "B" }   // UE import fields, see below
   ],
 
   "rooms": [
@@ -153,7 +156,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
       "areaId": "area_x1",
       "color": null,              // null = inherit the area colour
       "notes": "Ambush after the water drains.",
-      "cells": ["3,4", "4,4", "4,5"]
+      "cells": ["3,4", "4,4", "4,5"],
+      "number": 1                 // UE import field, see below
     }
   ],
 
@@ -189,7 +193,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
   "structures": [
     { "id": "struct_s1", "name": "Breakable Wall", "color": "#c9885a",
-      "notes": "Bomb it.", "cells": ["4,4", "4,5"] }
+      "notes": "Bomb it.", "cells": ["4,4", "4,5"],
+      "typeId": "OneWayDoor" }   // UE import field, see below
   ],
 
   "stamps": [
@@ -232,6 +237,12 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
 **Grey-box boxes** use absolute sub-cell coordinates, i.e. `worldCell * sub`. They aren't relative to the room's bounding box, so repainting the room's cells never shifts its interior geometry. Changing `sub` rescales all boxes to keep them in place.
 
+**UE import fields** feed the NSProject whitebox importer, which builds sub-level names and FacilityID tags from them (`XianZuCi_Room_B01_LD`).
+`area.region` is an `ENSRegionList` enum name picked from `mvmap-types.js`; it is set from any room's inspector and applies to the whole area.
+`area.letter` is that region's letter, written on export only. `room.number` is a positive integer, unique within its area; the room's code is the letter plus the number padded to two digits (`B01`).
+Export always writes all three, with `null` when unset; older files without them load fine. Duplicate numbers in an area, or unknown regions, are reported when a map is imported or opened from the library, and again on export.
+`typeId` on structures, edge structures and stamps is a type id from `mvmap-types.js`, picked in the inspector's Type dropdown (only that layer's types are offered); the element's name is display only. An element with no `typeId` field gets one when a map is loaded, if its name is exactly a type's label for that layer; otherwise it is listed in red as 未分类. `typeId: null` (elements created in the editor, or 未分类 picked by hand) is never re-guessed from the name. A renamed type keeps its old ids and labels in `oldIds` / `oldLabels`: on load, a `typeId` that is an old id becomes the current id, and an untyped element named with an old label is classified too (e.g. `Wall` / 墙体 → `Landscape` / 地形). Picking a type for a new element that still has its default name (`Structure 1`, `Platform 1`, `Stamp 1`) also gives it the type's label, colour and (stamps) emoji. Export writes `typeId` only when it is a type of the element's layer, and leaves the field out otherwise.
+
 **Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library. The map that was open becomes the newest undo step, so `Ctrl+Z` straight after an import brings it back.
 
 ### Browser storage
@@ -250,7 +261,11 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 ## Repo
 
 ```
-index.html   the entire editor
+index.html       the editor
+mvmap-types.js   vocabulary shared with the UE importer (regions, element types); edit this, not index.html
+mvmap-ue.js      pure helpers for the UE import fields (validation, room code, element types, export shape)
+test/            node --test tests for the two scripts above; run `npm test`
+package.json     only defines `npm test`, no dependencies
 README.md
 ```
 
