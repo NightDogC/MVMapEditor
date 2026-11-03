@@ -1,5 +1,5 @@
 # GitHub Pages: main at the site root, the v2 branch (MVMap 2.0, while it isn't merged) as a preview under /next/.
-# The same file lives on both branches, so a push to either rebuilds the whole site. A branch that is a Vite project
+# The same file lives on both branches, so a push to either rebuilds the whole site (deployed from main's run). A branch that is a Vite project
 # (has vite.config.mts) is built; a plain static one (1.x) is copied as it is.
 name: Pages
 
@@ -18,7 +18,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Only main may deploy to the github-pages environment. A push to another branch just asks for a run on main,
+  # which checks out and builds every branch anyway.
+  relay:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-node@v4
