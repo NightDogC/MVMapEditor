@@ -1,0 +1,72 @@
+# GitHub Pages: main at the site root, the v2 branch (MVMap 2.0, while it isn't merged) as a preview under /next/.
+# The same file lives on both branches, so a push to either rebuilds the whole site. A branch that is a Vite project
+# (has vite.config.mts) is built; a plain static one (1.x) is copied as it is.
+name: Pages
+
+on:
+  push:
+    branches: [main, v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Check out v2 (preview)
+        id: v2
+        continue-on-error: true # the branch goes away once 2.0 is merged
+        uses: actions/checkout@v4
+        with:
+          ref: v2
+          path: v2
+
+      - name: Build site
+        env:
+          HAS_V2: ${{ steps.v2.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          build() { # $1 checkout dir, $2 output dir
+            mkdir -p "$2"
+            if [ -f "$1/vite.config.mts" ]; then
+              (cd "$1" && npm ci --no-audit --no-fund && npm run build)
+              cp -r "$1/dist/." "$2"
+            else
+              rsync -a --exclude .git --exclude .github "$1/" "$2/"
+            fi
+          }
+          build main site
+          if [ "$HAS_V2" = "true" ]; then build v2 site/next; fi
+          touch site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

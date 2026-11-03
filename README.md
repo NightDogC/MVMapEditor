@@ -4,7 +4,7 @@ Forked from https://github.com/TitaniumCladStudios/MVMap
 
 A metroidvania map editor. Paint rooms onto grid paper, colour them by area, connect them with doors, and model progression with locks and keys — then grey-box the inside of any room without leaving the tool.
 
-It's a plain `index.html` plus two small scripts next to it (`mvmap-types.js`, `mvmap-ue.js`). No build step, no dependencies, no server, no account.
+Version 2 is a small Vite + TypeScript app: rooms stay on the grid, while structures, edge structures, stamps, notes and keys can be placed off the grid at an adjustable snap step. No server, no account — it runs entirely in the browser.
 
 Built to design an unannounced metroidvania.
 
@@ -12,20 +12,21 @@ Built to design an unannounced metroidvania.
 
 ## Running it
 
-Double-click `index.html`. That's it. Keep `mvmap-types.js` and `mvmap-ue.js` in the same folder — the editor warns and stops working without them.
-
-For real IndexedDB storage instead of the localStorage fallback, serve it over HTTP:
-
 ```sh
-python -m http.server 8080
-# then open http://localhost:8080
+npm install
+npm run dev        # editor at http://localhost:5173
+npm test           # unit tests (node --test, Node 22.18 or newer)
+npm run build      # type-check and build into dist/
+npm run preview    # serve the built dist/
 ```
 
-Chrome denies IndexedDB to `file://` pages, so opening the file directly falls back to localStorage. The app detects this and shows an amber notice at the bottom of the window. Everything still works — localStorage is just smaller (~5 MB) and easier to clear by accident. **Export often if you're working from `file://`.**
+The build in `dist/` is static and uses relative paths, so it can be served from any folder of any static host. It does need to be served over HTTP — browsers don't run module scripts from `file://`.
+
+`mvmap-types.js` and `mvmap-ue.js` stay plain scripts at the repo root (they are shared with the UE importer, its node tests and `export_mvmap_stamp_icons.py`); the page loads them before the app and the build copies them next to `index.html`. The editor warns and stops working without them.
 
 ### Deploying
 
-Commit `index.html`, `mvmap-types.js` and `mvmap-ue.js` to a repo and enable GitHub Pages on the branch. There's nothing to configure, and Pages serves over HTTPS so you get proper IndexedDB.
+`.github/workflows/pages.yml` builds the site on every push to `main` or `v2` and deploys it with GitHub Pages (repository **Settings → Pages → Source: GitHub Actions**). `main` is served at the site root; while 2.0 lives on the `v2` branch it is served as a preview under `/next/`. A branch that is a Vite project is built, a plain static one (1.x) is copied as it is. The `v1` branch keeps the single-file 1.x editor.
 
 ---
 
@@ -45,9 +46,11 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 ## Features
 
-**World grid** — unbounded grid paper, heavy line every 8 cells. Pan, zoom to cursor, zoom to fit. HUD shows the cell under the pointer.
+**World grid** — unbounded grid paper, heavy line every 8 cells. Pan, zoom to cursor, zoom to fit. HUD shows the cell under the pointer, or the snapped position for the off-grid tools.
 
-**Rooms** — painted as arbitrary cell sets, so an L-shaped shaft, a ring, or a long corridor is *one* room rather than several boxes glued together. Only the silhouette is outlined, so it reads like an in-game map. Drag a room in select mode and its keys — plus the doors it solely owns — move with it; doors shared with a neighbouring room stay anchored.
+**Snapping** — rooms and doors always sit on whole cells. Everything drawn over them (structures, edge structures, stamps, notes and keys) snaps to the step picked under **Snap** in the left panel: `1`, `½` (default), `⅓`, `¼`, `⅙`, `⅛` of a cell, or **Free**. Hold `Alt` to toggle snapping for the moment — off when a step is picked, back to the last step when it's Free; the bar outlines the step in effect. The grid draws the step's sub-lines while an off-grid tool is active. The step is stored per browser in `mvmap:snap`.
+
+**Rooms** — painted as arbitrary cell sets, so an L-shaped shaft, a ring, or a long corridor is *one* room rather than several boxes glued together. Only the silhouette is outlined, so it reads like an in-game map. Drag a room in select mode and everything sitting on it moves too: the doors it solely owns (doors shared with a neighbouring room stay anchored), the parts of structures and edge structures inside its cells (cut at the room's border), and the stamps, notes and keys centred in it.
 
 **Areas** — colour-coded biomes. Rooms inherit the area colour, or override it individually. The room list groups by area. Adding an area opens a room inside it immediately.
 
@@ -55,23 +58,23 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 **Locks and keys** — as above.
 
-**Structures** — a second layer of named, coloured cell sets painted *on top of* rooms: walls, breakable or hidden walls, switches, mechanisms. Draw with **S-Paint** (free paint) or **S-Rect** (drag a box); **S-Erase** removes structure cells without touching the room beneath. A structure can span several rooms, and moving a room carries the structure cells sitting on it.
+**Structures** — a second layer of named, coloured areas painted *on top of* rooms: walls, breakable or hidden walls, switches, mechanisms. A structure is a set of axis-aligned rectangles at the snap step — at `½`, a ledge one cell wide and half a cell tall is one stroke. Draw with **S-Paint** (a square brush the size of the step, `⅛` cell while snapping is free) or **S-Rect** (drag a box: from the step square under the press to the one under the pointer, or corner to corner when free); `Ctrl` erases with either. **S-Erase** removes structure area and cuts any edge structure it passes over, without touching the room beneath. Structures never overlap: painting one over another takes that area from the other. A structure can span several rooms.
 
-**Edge structures** — named, coloured sets of grid *edges*, drawn as thick bars on the lines between cells: platforms, ledges, one-way floors. With the **Edge** tool, drag along a grid line to lay a straight run of edges, or click a single edge. They use the same edge convention as doors, and ride along when their room moves.
+**Edge structures** — named, coloured sets of line segments, drawn as thick bars: platforms, ledges, one-way floors. With the **Edge** tool, drag from one snap point to another to lay a segment at any angle; hold `Shift` while dragging to lock it to 45° steps (`Shift` held as you press starts a new edge structure). Click a segment to select it; `Ctrl`-drag erases. Segments on one line that touch or overlap merge, and an overlap with another edge structure goes to the one drawn last; crossings are allowed.
 
-Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Clicking on the map selects only the connected *piece* under the pointer — dragging moves it and `Del` deletes it — so the separate parts of one structure stay independent (pick the structure in its list to select every piece): structure cells connect side by side (diagonal contact doesn't count), and edges connect when they share an end point, in a straight run or at a corner. Toggle them with **Show structures** / **Show structure names**.
+Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Clicking on the map selects only the connected *piece* under the pointer — dragging moves it (snapped) and `Del` deletes it — so the separate parts of one structure stay independent (pick the structure in its list to select every piece): rectangles connect along a side (corner contact doesn't count), and segments connect when they share any point. Toggle them with **Show structures** / **Show structure names**.
 
-**Stamps** — emoji markers placed on single cells, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed on as many cells as you like. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Alt`-click to remove; drag a placed stamp with Select to move that one cell.
+**Stamps** — emoji markers the size of one cell, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed as often as you like, at any snapped position. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Ctrl`-click to remove; drag a placed stamp (Stamp or Select tool) to move that one copy. Two stamps can't sit at exactly the same spot — placing one there replaces the other.
 
-**Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. Drag the open box anywhere (in any tool, Pan included); it keeps that spot after collapsing and reopening, and **Reset box position** in the Inspector puts it back beside the note. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
+**Notes** — standalone annotations the size of one cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click with the **Note** tool (`N`) to add one (it snaps like stamps; drag a note to move it) and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. Drag the open box anywhere (in any tool, Pan included); it keeps that spot after collapsing and reopening, and **Reset box position** in the Inspector puts it back beside the note. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Ctrl`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
 
-**Pencil** — freehand drawing on top of the map, off the grid, for sketches, arrows and quick annotations. Pick a colour (palette or custom) and a brush size in the bar that appears at the top of the map while the **Pencil** (`L`) or **P-Erase** (`Q`) tool is active. Pencil strokes don't belong to any area, room or structure, aren't picked by Select, and don't move with rooms. **P-Erase** — or `Alt` / right-click remove with the Pencil — rubs out pencil ink only, cutting strokes where the eraser passes; it never touches rooms, structures or anything else. **Clear all** in the bar removes every stroke (undoable). Strokes are saved with the map and included in export and PNG; **Show pencil drawings** in Options hides them.
+**Pencil** — freehand drawing on top of the map, off the grid, for sketches, arrows and quick annotations. Pick a colour (palette or custom) and a brush size in the bar that appears at the top of the map while the **Pencil** (`L`) or **P-Erase** (`Q`) tool is active. Pencil strokes don't belong to any area, room or structure, aren't picked by Select, and don't move with rooms. **P-Erase** — or `Ctrl` / right-click remove with the Pencil — rubs out pencil ink only, cutting strokes where the eraser passes; it never touches rooms, structures or anything else. **Clear all** in the bar removes every stroke (undoable). Strokes are saved with the map and included in export and PNG; **Show pencil drawings** in Options hides them.
 
-**Hand-placed markers** — structures, edge structures and stamps the UE importer won't generate get a marker: `manual` types an orange dashed outline and a **手** badge, 未分类 ones a red dotted outline and a **?** badge. Each connected piece gets its own badge (stamps: every cell); badges hide when cells are under 8 px on screen. **Highlight hand-placed only** in Options fades everything else except rooms. PNG export shows markers and fading as on screen.
+**Hand-placed markers** — structures, edge structures and stamps the UE importer won't generate get a marker: `manual` types an orange dashed outline and a **手** badge, 未分类 ones a red dotted outline and a **?** badge. Each connected piece gets its own badge (stamps: every copy); badges hide when cells are under 8 px on screen. **Highlight hand-placed only** in Options fades everything else except rooms. PNG export shows markers and fading as on screen.
 
 **Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, pencil drawings, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
-**Right-click** — configurable under Options. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
+**Right-click** — configurable under Options. *Remove* (default) acts like holding `Ctrl` with the current tool: erase room cells or structure area, cut edge segments, delete a door, key, note or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
 **Names & order** — a room's **Name position** puts its label in the centre or in one of four corners (anchored to a cell the room owns, so L-shapes keep it inside). Every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
 
@@ -100,7 +103,7 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `S` | Structure paint |
 | `T` | Structure rectangle |
 | `X` | Structure erase |
-| `P` | Edge structure (drag along grid lines) |
+| `P` | Edge structure (drag a segment) |
 | `M` | Emoji stamp |
 | `N` | Note |
 | `L` | Pencil |
@@ -108,11 +111,11 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `[` / `]` | Move selection up / down its list |
 | `Shift` + `[` / `]` | Move selection to top / bottom |
 | `H` or hold `Space` | Pan |
-| `Shift` + paint | Start a new room / structure / edge structure |
-| `Alt` + structure paint / edge drag | Erase instead |
-| Right-click | Remove, or hold and drag to pan (configurable) |
-| `Alt` + paint | Erase instead |
-| `Alt` + click door | Delete door |
+| Hold `Alt` | Toggle snapping (structures, edges, stamps, notes, keys) |
+| `Shift` + paint / click | Start a new room / structure / edge structure / stamp |
+| `Shift` while dragging an edge | Lock the segment to 45° steps |
+| `Ctrl` + paint / drag / click | Erase or remove instead (cells, structure area, edge segments, doors, keys, stamps, notes) |
+| Right-click | Remove (like `Ctrl`), or hold and drag to pan (configurable) |
 | `F` | Zoom to fit |
 | `Enter` | Grey-box selected room · expand / collapse selected note |
 | `Del` | Delete selection |
@@ -144,7 +147,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 ```jsonc
 {
   "id": "map_a1b2c3",
-  "version": 1,
+  "version": 2,
   "name": "Ruined Keep",
   "updated": 1753660800000,
 
@@ -197,13 +200,13 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
   "structures": [
     { "id": "struct_s1", "name": "Breakable Wall", "color": "#c9885a",
-      "notes": "Bomb it.", "cells": ["4,4", "4,5"],
-      "typeId": "OneWayDoor" }   // UE import field, see below
+      "notes": "Bomb it.", "typeId": "OneWayDoor",   // UE import field, see below
+      "rects": [ { "x": 4, "y": 4, "w": 1, "h": 2 }, { "x": 5, "y": 5.5, "w": 1.5, "h": 0.5 } ] }
   ],
 
   "stamps": [
     { "id": "stamp_m1", "name": "Save Point", "emoji": "💾", "color": "#5aa9f0",
-      "notes": "", "cells": ["6,4"] }
+      "notes": "", "points": [ { "x": 6, "y": 4 }, { "x": 9.25, "y": 2.5 } ] }
   ],
 
   "pencil": [
@@ -212,38 +215,42 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
   "notes": [
     { "id": "note_n1", "name": "Boss door", "text": "Opens after the Grapple fight.\nCheck the softlock.",
-      "color": "#f0dc3a", "x": 5, "y": 4, "expanded": false }
+      "color": "#f0dc3a", "x": 5, "y": 3.5, "expanded": false }
   ],
 
   "edgeStructs": [
-    { "id": "edge_e1", "name": "Ledge", "color": "#f0a13a",
-      "notes": "", "edges": ["h:3,5", "h:4,5"] }   // "o:x,y", same convention as doors
+    { "id": "edge_e1", "name": "Ledge", "color": "#f0a13a", "notes": "",
+      "segs": [ { "x1": 3, "y1": 5, "x2": 5, "y2": 5 }, { "x1": 5, "y1": 5, "x2": 6.5, "y2": 3.5 } ] }
   ]
 }
 ```
 
 ### Conventions
 
-**Cells** are `"x,y"` strings in world grid coordinates. Both axes are unbounded and may go negative.
+**Version 2** (MVMap 2.0). Files from 1.x (`version: 1`, structures / stamps as `cells`, edge structures as `edges`) load fine and are converted on the way in: structure cells become rectangles, runs of edges on one grid line become segments, stamp cells become points. 2.0 always saves and exports version 2, which the 1.x editor can't read.
+
+**Cells** are `"x,y"` strings in world grid coordinates, used by rooms (and doors' edges). Both axes are unbounded and may go negative.
+
+**Off-grid coordinates** — structures, edge structures, stamps, notes and keys use numbers in cell units, with the same origin and axes as the cells (`x: 3.5` is half way across cell column 3). They lie on a lattice of 1/96 cell — 96 is a multiple of every snap step — and are written with at most 4 decimals (`⅓` is `0.3333`); readers that need exact values can round `v * 96` to an integer.
 
 **Door edges** are identified by an orientation plus a cell coordinate:
 
 - `"v"` at `(x, y)` is the vertical edge dividing cells `(x-1, y)` and `(x, y)`
 - `"h"` at `(x, y)` is the horizontal edge dividing cells `(x, y-1)` and `(x, y)`
 
-**Structure cells** use the same `"x,y"` keys as rooms, on an independent layer: a cell can be in one room *and* one structure. Each cell belongs to at most one structure; painting it into another moves it.
+**Structure rects** are axis-aligned `{ x, y, w, h }` on an independent layer: an area can be in one room *and* one structure. The layer is exclusive — no point belongs to two structures, and a structure's own rects never overlap. They are kept in a canonical form: the area is cut into horizontal bands at every rect edge, each band's maximal runs are taken, and a run is stacked onto the rect above it when that rect has exactly the same x-range. The same area always gives the same list, and each connected piece's rects are exactly the canonical form of that piece.
 
-**Stamp cells** are `"x,y"` keys on their own layer; each cell holds at most one stamp.
+**Stamp points**, **keys** and **notes** are `{ x, y }`, the top-left corner of the one-cell box they occupy; the centre is `(x + 0.5, y + 0.5)`. No two stamps share exactly the same point.
 
 **Pencil strokes** are free polylines in world pixels (one grid cell = 32 px, same origin as the grid), stored flat as `[x0, y0, x1, y1, …]`; `size` is the stroke width in world pixels, so drawings scale with the map. A one-point stroke is a dot.
 
-**Notes** sit on cell `(x, y)` in world grid coordinates, at most one per cell. `expanded` is saved with the map, so an open note stays open. `box: { dx, dy }`, when present, is how far the open box was dragged from its default spot beside the note, in screen pixels (the box is drawn at a fixed screen size, so the offset holds at any zoom).
+**Notes** sit at `(x, y)` as above, at most one at any exact spot. `expanded` is saved with the map, so an open note stays open. `box: { dx, dy }`, when present, is how far the open box was dragged from its default spot beside the note, in screen pixels (the box is drawn at a fixed screen size, so the offset holds at any zoom).
 
 **`labelPos`** on a room places its name: `"tl"`, `"tr"`, `"bl"` or `"br"` for a corner; absent means centred.
 
 **`hideName: true`** may appear on rooms, structures, edge structures, stamps, notes and keys to hide that object's label on the map. When absent the name is shown.
 
-**Edge-structure edges** are `"o:x,y"` strings using the door edge convention above, e.g. `"h:3,5"`. Each edge belongs to at most one edge structure.
+**Edge-structure segments** are `{ x1, y1, x2, y2 }`, any angle. Within one edge structure, segments on the same line that touch or overlap are merged, so the list never repeats a stretch; across edge structures a stretch belongs to at most one (crossings are fine). Segments are stored pointing left to right, or top to bottom when vertical.
 
 **Grey-box boxes** use absolute sub-cell coordinates, i.e. `worldCell * sub`. They aren't relative to the room's bounding box, so repainting the room's cells never shifts its interior geometry. Changing `sub` rescales all boxes to keep them in place.
 
@@ -266,18 +273,29 @@ Export always writes all three, with `null` when unset; older files without them
 | localStorage | `mvmap:pencil` — pencil colour, brush size and eraser size |
 | localStorage | `mvmap:stampzoom` — zoom percentage above which stamp names show (default `60`) |
 | localStorage | `mvmap:keys` — custom tool shortcuts, `{ "toolId": "key", … }` |
+| localStorage | `mvmap:snap` — snap step: `1`, `1/2`, `1/3`, `1/4`, `1/6`, `1/8` or `free` |
 
 ---
 
 ## Repo
 
 ```
-index.html       the editor
-mvmap-types.js   vocabulary shared with the UE importer (regions, element types); edit this, not index.html
-mvmap-ue.js      pure helpers for the UE import fields (validation, room code, element types, export shape)
-test/            node --test tests for the two scripts above; run `npm test`
-package.json     only defines `npm test`, no dependencies
-README.md
+index.html          page shell; loads the two scripts below, then src/main.ts
+mvmap-types.js      vocabulary shared with the UE importer (regions, element types); edit this, not the app
+mvmap-ue.js         pure helpers for the UE import fields (validation, room code, element types, export shape)
+src/
+  model/            document types, newDoc, migrate (incl. 1.x -> 2.0), colours and emoji
+  geom/             tick lattice and snap steps, rect regions (union / subtract / canonical form / pieces / outline),
+                    segments (merge / cut / pieces)
+  state/            runtime state, undo, storage, snapping, room / door / key edits, off-grid layer edits, pencil
+  render/           camera, grid / rooms / doors / keys, structures / edges / stamps / markers, notes, render loop
+  tools/            pointer and keyboard input, tool shortcuts
+  ui/               panels, inspector, snap bar, pencil bar, grey-box editor, modals
+  io/               JSON import / export, PNG export
+  styles/           app.css
+test/               node --test: vocabulary, UE helpers, geometry, 1.x migration
+docs/2.0-design.md  2.0 design decisions
+export_mvmap_stamp_icons.py   renders the manual types' emoji as UE placeholder icons (reads the stamp font from src/)
 ```
 
 ---
@@ -286,4 +304,4 @@ README.md
 
 Tested in Chromium-based browsers. Requires Canvas 2D, IndexedDB or localStorage, and pointer events — nothing exotic, but there's no polyfill layer, so a very old browser will simply fail rather than degrade.
 
-The whole thing is about 4,300 lines of plain HTML, CSS, and JavaScript in one file, organised into 18 numbered sections. `Ctrl+F` for `═══` to jump between them.
+1.x was a single `index.html`; it lives on in the `v1` branch.

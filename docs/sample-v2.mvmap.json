@@ -1,0 +1,153 @@
+{
+  "id": "map_sample",
+  "version": 2,
+  "name": "2.0 sample",
+  "updated": 1793664000000,
+  "areas": [
+    {
+      "id": "area_b",
+      "name": "先祖祠",
+      "color": "#4c8dd8",
+      "region": "XianZuCi",
+      "letter": "B"
+    }
+  ],
+  "rooms": [
+    {
+      "id": "room_1",
+      "name": "中堂",
+      "areaId": "area_b",
+      "color": null,
+      "notes": "",
+      "number": 1,
+      "cells": [
+        "0,0",
+        "1,0",
+        "2,0",
+        "3,0",
+        "0,1",
+        "1,1",
+        "2,1",
+        "3,1",
+        "0,2",
+        "1,2",
+        "2,2",
+        "3,2"
+      ]
+    }
+  ],
+  "doors": [
+    {
+      "id": "door_1",
+      "x": 4,
+      "y": 1,
+      "o": "v",
+      "kind": "door",
+      "dir": 1,
+      "lockId": null
+    }
+  ],
+  "locks": [],
+  "keys": [],
+  "detail": {},
+  "structures": [
+    {
+      "id": "struct_ground",
+      "name": "地形",
+      "color": "#7c879b",
+      "notes": "",
+      "typeId": "Landscape",
+      "rects": [
+        {
+          "x": 2.25,
+          "y": 1.5,
+          "w": 1,
+          "h": 0.3333
+        },
+        {
+          "x": 0,
+          "y": 2,
+          "w": 1,
+          "h": 0.5
+        },
+        {
+          "x": 0,
+          "y": 2.5,
+          "w": 4,
+          "h": 0.5
+        }
+      ]
+    },
+    {
+      "id": "struct_spikes",
+      "name": "刺",
+      "color": "#e0555f",
+      "notes": "",
+      "typeId": "DamageTerrain",
+      "rects": [
+        {
+          "x": 1,
+          "y": 2.25,
+          "w": 1.25,
+          "h": 0.25
+        }
+      ]
+    },
+    {
+      "id": "struct_hidden",
+      "name": "隐藏区域",
+      "color": "#a97af0",
+      "notes": "",
+      "typeId": "HiddenArea",
+      "rects": [
+        {
+          "x": 3,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        }
+      ]
+    }
+  ],
+  "edgeStructs": [
+    {
+      "id": "edge_platform",
+      "name": "可下落平台",
+      "color": "#f0dc3a",
+      "notes": "",
+      "typeId": "JumpOffPlatform",
+      "segs": [
+        {
+          "x1": 0.5,
+          "y1": 1.5,
+          "x2": 2,
+          "y2": 1.5
+        },
+        {
+          "x1": 2,
+          "y1": 1.5,
+          "x2": 3,
+          "y2": 0.5
+        }
+      ]
+    }
+  ],
+  "stamps": [
+    {
+      "id": "stamp_start",
+      "name": "出生点",
+      "emoji": "❤️",
+      "color": "#5ad07a",
+      "notes": "",
+      "typeId": "PlayerStart",
+      "points": [
+        {
+          "x": 0.5,
+          "y": 1
+        }
+      ]
+    }
+  ],
+  "notes": [],
+  "pencil": []
+}
