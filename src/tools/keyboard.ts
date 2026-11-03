@@ -6,7 +6,6 @@ import { reorderSel } from "../state/order.ts";
 import { fitWorld } from "../render/view.ts";
 import { exportJSON } from "../io/files.ts";
 import { modalOpen, closeModal } from "../ui/modals.ts";
-import { detailKey, openDetail } from "../ui/detail.ts";
 import { renderSnapBar } from "../ui/snapbar.ts";
 import { toolForKey } from "./keymap.ts";
 import { setTool } from "./tool.ts";
@@ -85,7 +84,6 @@ export function bindKeyboard(): void {
       if (e.key === "Escape") closeModal();
       return;
     }
-    if (S.detailRoomId) return detailKey(e);
 
     const tk = toolForKey(k);
     if (tk) return setTool(tk);
@@ -100,7 +98,6 @@ export function bindKeyboard(): void {
       reorderSel(e.shiftKey ? (up ? "top" : "bottom") : up ? "up" : "down");
       return;
     }
-    if (e.key === "Enter" && S.sel && S.sel.type === "room") return openDetail(S.sel.id);
     if (e.key === "Enter" && S.sel && S.sel.type === "note") {
       const n = noteById(S.sel.id);
       if (n) {

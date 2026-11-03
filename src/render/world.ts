@@ -11,7 +11,6 @@ import { edgeMid } from "../state/rooms.ts";
 import { penBox } from "../state/pencil.ts";
 import { snapTicks, brushTicks, snapPoint, snapSquare, snapBox } from "../state/snap.ts";
 import { dragRect } from "../tools/shapes.ts";
-import { drawDetail } from "../ui/detail.ts";
 import { $, hexA, clamp } from "../util.ts";
 
 export const worldCanvas = $<HTMLCanvasElement>("#world");
@@ -258,15 +257,11 @@ export function drawWorld(ctx: CanvasRenderingContext2D, V: View, opts: DrawOpts
 export function frame(): void {
   if (app.needsDraw) {
     app.needsDraw = false;
-    if (!S.detailRoomId) {
-      const [w, h] = resizeCanvas(worldCanvas, wctx);
-      app.VW = w;
-      app.VH = h;
-      drawWorld(wctx, makeView(S.cam, w, h), {});
-      $("#hud-zoom").textContent = Math.round(S.cam.zoom * 100) + "%";
-    } else {
-      drawDetail();
-    }
+    const [w, h] = resizeCanvas(worldCanvas, wctx);
+    app.VW = w;
+    app.VH = h;
+    drawWorld(wctx, makeView(S.cam, w, h), {});
+    $("#hud-zoom").textContent = Math.round(S.cam.zoom * 100) + "%";
   }
   requestAnimationFrame(frame);
 }

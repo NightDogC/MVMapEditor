@@ -74,20 +74,6 @@ export interface Key {
   hideName?: boolean;
 }
 
-export interface DetailBox {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  type: string;
-  label: string;
-}
-export interface Detail {
-  sub: number;
-  boxes: DetailBox[];
-}
-
 interface Element {
   id: string;
   name: string;
@@ -143,7 +129,6 @@ export interface MapDoc {
   doors: Door[];
   locks: Lock[];
   keys: Key[];
-  detail: Record<string, Detail>;
   structures: Structure[];
   edgeStructs: EdgeStruct[];
   stamps: Stamp[];

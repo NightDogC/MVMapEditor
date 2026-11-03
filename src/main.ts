@@ -13,7 +13,6 @@ import { setTool } from "./tools/tool.ts";
 import { bindPanels, setStampZoom } from "./ui/bind.ts";
 import { bindPencilBar, loadPencilPrefs } from "./ui/pencilbar.ts";
 import { bindSnapBar } from "./ui/snapbar.ts";
-import { bindDetail } from "./ui/detail.ts";
 import { bindModals } from "./ui/modals.ts";
 import { bindFiles, loadDoc } from "./io/files.ts";
 import { renderUI } from "./ui/panels.ts";
@@ -25,7 +24,6 @@ async function boot(): Promise<void> {
   bindPanels();
   bindPencilBar();
   bindSnapBar();
-  bindDetail();
   bindModals();
   bindFiles();
 

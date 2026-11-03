@@ -158,7 +158,7 @@
           <label class="inline opt-row" title="Stamp names appear once the map is zoomed in further than this">Stamp labels above zoom
             <span class="num-wrap"><input type="number" id="num-stampzoom" min="10" max="800" step="5" value="60" />%</span>
           </label>
-          <label class="inline opt-row" title="What the right mouse button does on the map and in grey-box">Right-click
+          <label class="inline opt-row" title="What the right mouse button does on the map">Right-click
             <select id="sel-rclick">
               <option value="remove">Remove</option>
               <option value="pan">Hold &amp; drag to pan</option>
@@ -166,35 +166,6 @@
           </label>
         </section>
       </aside>
-    </div>
-
-    <!-- ── Greybox overlay ─────────────────────────────────────────── -->
-    <div id="detail" class="overlay" hidden>
-      <div class="detail-bar">
-        <button class="tb" id="detail-close">← Map</button>
-        <strong id="detail-title">Room</strong>
-        <div class="detail-tools" id="detail-tools">
-          <button class="tool sm" data-dtool="box"><span class="glyph">▭</span>Box<span class="kb">B</span></button>
-          <button class="tool sm" data-dtool="select"><span class="glyph">➤</span>Select<span class="kb">V</span></button>
-          <button class="tool sm" data-dtool="erase"><span class="glyph">◌</span>Erase<span class="kb">E</span></button>
-          <button class="tool sm" data-dtool="pan"><span class="glyph">✥</span>Pan<span class="kb">H</span></button>
-        </div>
-        <div class="detail-types" id="detail-types"></div>
-        <div class="spacer"></div>
-        <label class="inline"
-          >Subdiv
-          <select id="detail-sub">
-            <option value="4">4×</option>
-            <option value="8">8×</option>
-            <option value="16">16×</option>
-          </select>
-        </label>
-        <button class="tb" id="detail-fit">fit</button>
-      </div>
-      <div class="detail-stage">
-        <canvas id="detail-canvas"></canvas>
-        <div class="detail-inspector" id="detail-inspector" hidden></div>
-      </div>
     </div>
 
     <div id="modal" class="modal-backdrop" hidden><div class="modal" id="modal-box"></div></div>

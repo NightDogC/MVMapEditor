@@ -6,7 +6,6 @@ import { UE, ELEMENT_TYPES } from "../ue.ts";
 import { ck } from "../util.ts";
 import { scheduleSave } from "./persist.ts";
 import { renderUI } from "../ui/panels.ts";
-import { closeDetail, renderDetailInspector } from "../ui/detail.ts";
 
 export type Tool =
   | "select" | "paint" | "rect" | "erase" | "door" | "key" | "pan"
@@ -56,12 +55,6 @@ export const S = {
   hoverEdge: null as { o: "v" | "h"; x: number; y: number } | null,
   drag: null as any,
   spaceDown: false,
-  detailRoomId: null as string | null,
-  dtool: "box",
-  dtype: "solid",
-  dsel: null as string | null,
-  dcam: { x: 0, y: 0, zoom: 1 },
-  ddrag: null as any,
 };
 
 /** Indexes rebuilt by reindex(): whole-cell rooms and doors. */
@@ -167,8 +160,6 @@ function restore(json: string): void {
   if (!structById(S.activeStructId)) S.activeStructId = null;
   if (!edgeStructById(S.activeEdgeId)) S.activeEdgeId = null;
   if (!stampById(S.activeStampId)) S.activeStampId = null;
-  if (S.detailRoomId && !roomById(S.detailRoomId)) closeDetail();
-  if (S.detailRoomId) renderDetailInspector();
   commit();
 }
 export function undo(): void {
@@ -189,7 +180,7 @@ export function commit(skipSave?: boolean): void {
   reindex();
   app.needsDraw = true;
   // Rebuilding every panel on each step of a paint drag is wasteful — defer to drag end.
-  if (S.drag || S.ddrag) uiDirty = true;
+  if (S.drag) uiDirty = true;
   else renderUI();
   if (!skipSave) scheduleSave();
 }

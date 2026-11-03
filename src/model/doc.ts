@@ -19,7 +19,6 @@ export function newDoc(name?: string): MapDoc {
     doors: [],
     locks: [],
     keys: [],
-    detail: {},
     structures: [],
     edgeStructs: [],
     stamps: [],
@@ -94,7 +93,7 @@ export function migrate(input: unknown, migrateTypes?: (d: MapDoc) => MapDoc): M
   d.locks = Array.isArray(d.locks) ? d.locks : [];
   d.keys = (Array.isArray(d.keys) ? d.keys : []).filter((k) => k && fin(k.x, k.y));
   d.keys.forEach((k) => ((k.x = quantize(k.x)), (k.y = quantize(k.y))));
-  d.detail = d.detail && typeof d.detail === "object" ? d.detail : {};
+  delete (d as Record<string, unknown>).detail; // 1.x grey-box data; the grey-box editor is gone
   d.rooms.forEach((r) => {
     r.cells = Array.isArray(r.cells) ? r.cells : [];
     if (!d.areas.some((a) => a.id === r.areaId)) r.areaId = d.areas[0].id;

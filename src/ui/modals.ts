@@ -89,17 +89,13 @@ const HELP = `
   <p>Choose what the right mouse button does under <b>Right-click</b> in <b>Options</b>, at the bottom of the right panel.
      <b>Remove</b> works like holding <b>Ctrl</b> with the current tool — erase cells, clear structure
      area or edge segments, delete a door, key, note or stamp; with <b>Select</b> it removes the smallest thing under
-     the pointer, and in grey-box it erases boxes. <b>Hold &amp; drag to pan</b> turns it into a pan
+     the pointer. <b>Hold &amp; drag to pan</b> turns it into a pan
      button instead. The choice is remembered in this browser.</p>
   <h3>Names &amp; order</h3>
   <p>A room's <b>Name position</b> puts its label in the centre or in one of its four corners.
      Every inspector has <b>Show name on map</b> to hide one object's label, and <b>Order</b> buttons
      to move the selection up or down its list (rooms reorder within their area). Lists draw in order,
      so later entries paint over earlier ones.</p>
-  <h3>Grey-boxing a room</h3>
-  <p>Double-click any room (or press <b>Enter</b> with it selected) to open a subdivided grid for that
-     room, and block out its interior with typed boxes — solid, platform, hazard, water, ladder, exit,
-     item, enemy, note. Doors on the room's border are drawn as anchors.</p>
   <h3>Storage</h3>
   <p>Maps autosave to your browser (IndexedDB, or localStorage when that isn't available). Use
      <b>Export</b> for a portable <code>.json</code> file and <b>PNG</b> for an image of the whole map.
@@ -126,20 +122,12 @@ const HELP = `
     <b>Ctrl + paint / click</b><span>Erase / remove instead</span>
     <b>Right-click</b><span>Remove, or drag to pan (configurable)</span>
     <b>F</b><span>Zoom to fit</span>
-    <b>Enter</b><span>Grey-box selected room · expand / collapse selected note</span>
+    <b>Enter</b><span>Expand / collapse selected note</span>
     <b>Del</b><span>Delete selection</span>
     <b>[ / ]</b><span>Move selection up / down its list</span>
     <b>Shift + [ / ]</b><span>Move selection to top / bottom</span>
     <b>Ctrl + Z / Y</b><span>Undo / redo</span>
     <b>Ctrl + S</b><span>Export JSON</span>
-  </div>
-  <h3>Grey-box shortcuts</h3>
-  <div class="kbd-grid">
-    <b>B</b><span>Draw box</span>
-    <b>V</b><span>Select / move / resize</span>
-    <b>E</b><span>Erase box</span>
-    <b>1–9</b><span>Pick box type</span>
-    <b>Esc</b><span>Deselect, then back to map</span>
   </div>
   <div class="close-row"><button class="btn primary" data-close style="flex:0 0 auto;padding:6px 16px">Close</button></div>`;
 

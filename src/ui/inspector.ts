@@ -14,7 +14,6 @@ import { segLength } from "../geom/segs.ts";
 import { TICKS, fromT } from "../geom/lattice.ts";
 import { UE, REGIONS, ELEMENT_TYPES } from "../ue.ts";
 import { setTool } from "../tools/tool.ts";
-import { openDetail } from "./detail.ts";
 import { renderLists } from "./panels.ts";
 import { $, esc } from "../util.ts";
 
@@ -34,7 +33,7 @@ export function renderInspector(): void {
       st ? ` Structure tools draw into <b style="color:${structColor(st)}">${esc(st.name)}</b>.` : ""
     }${
       es ? ` Edge tool draws into <b style="color:${structColor(es)}">${esc(es.name)}</b>.` : ""
-    }<br /><br />Select a room to rename, recolour, or grey-box it. Select a door to lock it. Select a lock to see which keys open it. Select a structure or edge structure to rename or recolour it.</div>`;
+    }<br /><br />Select a room to rename or recolour it. Select a door to lock it. Select a lock to see which keys open it. Select a structure or edge structure to rename or recolour it.</div>`;
     return;
   }
   const t = sel.type;
@@ -104,7 +103,6 @@ function numberWarning(r: Room): string {
 
 function inspectRoom(host: HTMLElement, r: Room): void {
   const b = roomBBox(r);
-  const det = S.doc.detail[r.id];
   const ar = areaById(r.areaId);
   const region = UE.findRegion(REGIONS, ar.region);
   host.innerHTML = `
@@ -140,11 +138,8 @@ function inspectRoom(host: HTMLElement, r: Room): void {
       <button class="btn" id="i-clear-color" style="margin-top:4px">Use area colour</button>
     </div>
     <div class="fld"><label>Notes</label><textarea id="i-notes" placeholder="Design notes, enemies, secrets…">${esc(r.notes)}</textarea></div>
-    <div class="meta">${r.cells.length} cells · ${b ? b.w + "×" + b.h : "—"} at ${b ? b.x0 + "," + b.y0 : "—"}${
-      det && det.boxes.length ? ` · ${det.boxes.length} greybox shapes` : ""
-    }</div>
+    <div class="meta">${r.cells.length} cells · ${b ? b.w + "×" + b.h : "—"} at ${b ? b.x0 + "," + b.y0 : "—"}</div>
     <div class="btn-row">
-      <button class="btn primary" id="i-detail">Grey-box…</button>
       <button class="btn danger" id="i-del">Delete</button>
     </div>`;
 
@@ -195,7 +190,6 @@ function inspectRoom(host: HTMLElement, r: Room): void {
     r.color = null;
     commit();
   };
-  $("#i-detail").onclick = () => openDetail(r.id);
   host.querySelectorAll<HTMLElement>("[data-lpos]").forEach((b2) => {
     b2.onclick = () => {
       pushUndo();

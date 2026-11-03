@@ -72,3 +72,8 @@ test("UE buildExportDoc keeps the version-2 geometry untouched", () => {
   assert.deepEqual(out.stamps[0].points, d.stamps[0].points);
   assert.equal(out.version, 2);
 });
+
+test("grey-box data from older files is dropped on load", () => {
+  const d = migrate({ ...v1(), detail: { r1: { sub: 8, boxes: [{ id: "b", x: 0, y: 0, w: 2, h: 2, type: "solid", label: "" }] } } });
+  assert.ok(!("detail" in d));
+});

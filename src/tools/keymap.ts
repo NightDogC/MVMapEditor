@@ -28,7 +28,7 @@ export const DEFAULT_TOOL_KEYS: Record<Tool, string> = {
 export const RESERVED_KEYS: Record<string, string> = {
   " ": "Space — hold to pan",
   f: "F — zoom to fit",
-  enter: "Enter — grey-box the selected room",
+  enter: "Enter — expand / collapse the selected note",
   escape: "Esc — deselect",
   delete: "Del — delete selection",
   backspace: "Backspace — delete selection",

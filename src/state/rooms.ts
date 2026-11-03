@@ -3,7 +3,6 @@ import type { Room, Door } from "../model/types.ts";
 import { CELL, LOCK_COLORS } from "../model/constants.ts";
 import { S, idx, reindex, roomById, areaById, keyById } from "./store.ts";
 import { carryOffGrid } from "./layers.ts";
-import { closeDetail } from "../ui/detail.ts";
 import { uid, ck, unck } from "../util.ts";
 
 /* ── edges (doors) ───────────────────────────────────────────────── */
@@ -85,16 +84,14 @@ export function eraseCell(x: number, y: number): boolean {
   idx.cell.delete(k);
   return true;
 }
-/** Remove rooms left with no cells (plus their greybox data). */
+/** Remove rooms left with no cells. */
 export function dropEmptyRooms(): void {
   const gone = S.doc.rooms.filter((r) => !r.cells.length).map((r) => r.id);
   if (!gone.length) return;
   S.doc.rooms = S.doc.rooms.filter((r) => r.cells.length);
   gone.forEach((id) => {
-    delete S.doc.detail[id];
     if (S.activeRoomId === id) S.activeRoomId = null;
     if (S.sel && S.sel.type === "room" && S.sel.id === id) S.sel = null;
-    if (S.detailRoomId === id) closeDetail();
   });
 }
 export function deleteRoom(id: string): void {
@@ -102,14 +99,12 @@ export function deleteRoom(id: string): void {
   if (!r) return;
   const cells = new Set(r.cells);
   S.doc.rooms = S.doc.rooms.filter((x) => x.id !== id);
-  delete S.doc.detail[id];
   reindex();
   pruneDoors();
   S.doc.keys = S.doc.keys.filter((k) => !cells.has(ck(...markerCell(k.x, k.y))));
   S.doc.locks.forEach((l) => (l.keyIds = l.keyIds.filter((kid) => keyById(kid))));
   if (S.activeRoomId === id) S.activeRoomId = null;
   if (S.sel && S.sel.id === id) S.sel = null;
-  if (S.detailRoomId === id) closeDetail();
 }
 export function deleteDoor(id: string): void {
   S.doc.doors = S.doc.doors.filter((d) => d.id !== id);
@@ -153,7 +148,7 @@ export function createKeyAt(x: number, y: number) {
   return k;
 }
 
-/** Move a room's cells, the doors it solely owns, its grey-box geometry and everything off-grid sitting on it. */
+/** Move a room's cells, the doors it solely owns and everything off-grid sitting on it. */
 export function translateRoom(room: Room, dx: number, dy: number): void {
   if (!dx && !dy) return;
   const owned = new Set(room.cells);
@@ -188,12 +183,5 @@ export function translateRoom(room: Room, dx: number, dy: number): void {
   });
   reindex();
   carry(dx, dy);
-  // shift greybox geometry with the room
-  const det = S.doc.detail[room.id];
-  if (det)
-    det.boxes.forEach((b) => {
-      b.x += dx * det.sub;
-      b.y += dy * det.sub;
-    });
   dropEmptyRooms();
 }

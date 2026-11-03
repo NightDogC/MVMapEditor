@@ -6,7 +6,6 @@ import { S, undoStack, redoStack, migrateDoc, snapshot, commit } from "../state/
 import { docBBox } from "../state/layers.ts";
 import { makeView, fitWorld } from "../render/view.ts";
 import { drawWorld } from "../render/world.ts";
-import { closeDetail } from "../ui/detail.ts";
 import { renderUI } from "../ui/panels.ts";
 import { UE, REGIONS, ELEMENT_TYPES } from "../ue.ts";
 import { $, uid, clamp, saveBlob, slug } from "../util.ts";
@@ -51,7 +50,6 @@ export function loadDoc(d: unknown): void {
   S.activeAreaId = S.doc.areas[0].id;
   undoStack.length = 0;
   redoStack.length = 0;
-  closeDetail();
   $<HTMLInputElement>("#map-name").value = S.doc.name;
   commit();
   fitWorld();

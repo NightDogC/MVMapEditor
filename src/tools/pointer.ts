@@ -28,7 +28,6 @@ import { penBox, erasePencil, simplify, roundPt } from "../state/pencil.ts";
 import { snapTicks, brushTicks, pxToT, tToPx, snapPoint, snapSquare, snapBox, isFreeNow } from "../state/snap.ts";
 import { dragRect, lockAngle } from "./shapes.ts";
 import { renderSnapBar } from "../ui/snapbar.ts";
-import { openDetail } from "../ui/detail.ts";
 import { $, uid } from "../util.ts";
 
 interface SP {
@@ -680,18 +679,6 @@ export function bindPointer(): void {
     S.hoverPt = null;
     S.hoverEdge = null;
     requestDraw();
-  });
-  worldCanvas.addEventListener("dblclick", (e) => {
-    const V = worldView();
-    const p = evPos(e);
-    const hit = pickAt(V, p);
-    if (hit && hit.type === "room") openDetail(hit.id);
-    else if (hit && (hit.type === "struct" || hit.type === "edge" || hit.type === "stamp")) {
-      // off-grid elements sit on top of rooms — open the room underneath
-      const c = cellAt(V, p);
-      const r = roomAtCell(c.x, c.y);
-      if (r) openDetail(r.id);
-    }
   });
   worldCanvas.addEventListener("contextmenu", (e) => e.preventDefault());
   worldCanvas.addEventListener(

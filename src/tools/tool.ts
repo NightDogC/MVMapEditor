@@ -5,7 +5,7 @@ import { $ } from "../util.ts";
 
 const SNAP = "<kbd>Alt</kbd> toggles snapping";
 export const HINTS: Record<Tool, string> = {
-  select: `Click to select · drag to move · double-click a room to grey-box it · <kbd>Del</kbd> removes · ${SNAP}`,
+  select: `Click to select · drag to move · <kbd>Del</kbd> removes · ${SNAP}`,
   paint: "Drag to paint cells into the active room · <kbd>Ctrl</kbd> erases · <kbd>Shift</kbd> starts a new room",
   rect: "Drag a rectangle to fill cells into the active room · <kbd>Ctrl</kbd> clears the rectangle",
   erase: "Drag over cells to remove them from their room",

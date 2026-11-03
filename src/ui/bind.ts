@@ -3,13 +3,12 @@ import type { Tool } from "../state/store.ts";
 import { AREA_COLORS, CELL } from "../model/constants.ts";
 import { S, requestDraw, pushUndo, commit, undo, redo, setActiveArea, activeArea, areaById, roomById, keyById, structById, edgeStructById, stampById } from "../state/store.ts";
 import { scheduleSave } from "../state/persist.ts";
-import { createRoom, createLock } from "../state/rooms.ts";
+import { createRoom, createLock, roomBBox } from "../state/rooms.ts";
 import { sT, eT, createStruct, createEdgeStruct, createStamp } from "../state/layers.ts";
 import { bbox } from "../geom/region.ts";
 import { TICKS } from "../geom/lattice.ts";
 import { fitWorld } from "../render/view.ts";
 import { setTool } from "../tools/tool.ts";
-import { openDetail } from "./detail.ts";
 import { renderLists } from "./panels.ts";
 import { $, uid, clamp, prefs } from "../util.ts";
 
@@ -102,7 +101,8 @@ export function bindPanels(): void {
   });
   $("#room-list").addEventListener("dblclick", (e) => {
     const row = closestData(e, "room");
-    if (row) openDetail(row.dataset.room!);
+    const b = row && roomBBox(roomById(row.dataset.room));
+    if (b) focusBox({ x0: b.x0, y0: b.y0, x1: b.x1 + 1, y1: b.y1 + 1 });
   });
   $("#lock-list").addEventListener("click", (e) => {
     const row = closestData(e, "lock");

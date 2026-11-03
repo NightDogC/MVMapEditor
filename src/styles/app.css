@@ -232,10 +232,6 @@ textarea {
   border-color: var(--acc-2);
   color: #cfe6ff;
 }
-.tool.sm {
-  padding: 4px 8px;
-  font-size: 11.5px;
-}
 .tool .kb {
   margin-left: auto;
   font: 10px/1 var(--mono);
@@ -244,9 +240,6 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 2px 4px;
-}
-.tool.sm .kb {
-  margin-left: 6px;
 }
 .tool.on .kb {
   color: #cfe6ff;
@@ -458,8 +451,7 @@ textarea {
   overflow: hidden;
   background: var(--bg);
 }
-#world,
-#detail-canvas {
+#world {
   display: block;
   width: 100%;
   height: 100%;
@@ -711,70 +703,6 @@ textarea {
   color: var(--danger);
 }
 
-/* ── Detail overlay ────────────────────────────────────────── */
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-}
-.overlay[hidden] {
-  display: none;
-}
-.detail-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 10px;
-  height: 42px;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--line);
-}
-.detail-tools {
-  display: flex;
-  gap: 4px;
-}
-.detail-types {
-  display: flex;
-  gap: 3px;
-  flex-wrap: wrap;
-}
-.ty {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 3px 7px;
-  font-size: 11px;
-  color: var(--tx-dim);
-}
-.ty.on {
-  border-color: var(--tx-dim);
-  color: var(--tx);
-}
-.detail-stage {
-  position: relative;
-  flex: 1;
-  overflow: hidden;
-}
-.detail-inspector {
-  position: absolute;
-  right: 12px;
-  top: 12px;
-  width: 210px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
-}
 .inline {
   display: flex;
   align-items: center;

@@ -1,5 +1,4 @@
 export const CELL = 32; // world px per grid cell
-export const DCELL = 22; // detail px per sub-cell
 export const MAJOR = 8; // heavy grid line every N cells
 
 export const AREA_COLORS = [
@@ -41,15 +40,3 @@ export function pickEmoji(str: string): string | null {
   return gs.length ? gs[gs.length - 1] : null;
 }
 
-export const BOX_TYPES = [
-  { id: "solid", name: "Solid", color: "#7c879b" },
-  { id: "platform", name: "Platform", color: "#3fb27f" },
-  { id: "hazard", name: "Hazard", color: "#e0555f" },
-  { id: "water", name: "Water", color: "#4cc9d8" },
-  { id: "ladder", name: "Ladder", color: "#f0a13a" },
-  { id: "exit", name: "Exit", color: "#a56fd0" },
-  { id: "item", name: "Item", color: "#f0dc3a" },
-  { id: "enemy", name: "Enemy", color: "#d84c7a" },
-  { id: "note", name: "Note", color: "#8b93a6" },
-];
-export const boxType = (id: string) => BOX_TYPES.find((t) => t.id === id) || BOX_TYPES[0];

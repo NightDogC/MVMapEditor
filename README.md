@@ -2,7 +2,7 @@
 
 Forked from https://github.com/TitaniumCladStudios/MVMap
 
-A metroidvania map editor. Paint rooms onto grid paper, colour them by area, connect them with doors, and model progression with locks and keys — then grey-box the inside of any room without leaving the tool.
+A metroidvania map editor. Paint rooms onto grid paper, colour them by area, connect them with doors, and model progression with locks and keys.
 
 Version 2 is a small Vite + TypeScript app: rooms stay on the grid, while structures, edge structures, stamps, notes and keys can be placed off the grid at an adjustable snap step. No server, no account — it runs entirely in the browser.
 
@@ -74,15 +74,13 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, pencil drawings, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
-**Right-click** — configurable under Options. *Remove* (default) acts like holding `Ctrl` with the current tool: erase room cells or structure area, cut edge segments, delete a door, key, note or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
+**Right-click** — configurable under Options. *Remove* (default) acts like holding `Ctrl` with the current tool: erase room cells or structure area, cut edge segments, delete a door, key, note or stamp; with Select it removes the smallest thing under the pointer. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
 **Names & order** — a room's **Name position** puts its label in the centre or in one of four corners (anchored to a cell the room owns, so L-shapes keep it inside). Every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
 
-**Grey-box view** — double-click a room to open its cells subdivided 4×, 8×, or 16×, with the world-cell boundaries still drawn as heavy lines and the border doors rendered as anchors. Block out the interior with typed boxes: solid, platform, hazard, water, ladder, exit, item, enemy, note. Move, resize, and label them. Changing subdivision rescales existing boxes in place.
-
 **Storage** — autosaves to IndexedDB (localStorage fallback) with a **Maps…** library for multiple projects. Export/import JSON, export the whole map as a PNG.
 
-**Undo/redo** — snapshot-based, covers everything including grey-box edits.
+**Undo/redo** — snapshot-based, covers everything.
 
 ---
 
@@ -117,26 +115,13 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `Ctrl` + paint / drag / click | Erase or remove instead (cells, structure area, edge segments, doors, keys, stamps, notes) |
 | Right-click | Remove (like `Ctrl`), or hold and drag to pan (configurable) |
 | `F` | Zoom to fit |
-| `Enter` | Grey-box selected room · expand / collapse selected note |
+| `Enter` | Expand / collapse selected note |
 | `Del` | Delete selection |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Export JSON |
 | `Esc` | Deselect |
 
-### Grey-box
-
-| Key | Action |
-|---|---|
-| `B` | Draw box |
-| `V` | Select / move / resize |
-| `E` | Erase box |
-| `H` or hold `Space` | Pan |
-| `1`–`9` | Pick box type |
-| `F` | Zoom to fit |
-| `Del` | Delete selected box |
-| `Esc` | Deselect, then back to the map |
-
-Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
+Mouse: scroll to zoom, middle-drag to pan.
 
 ---
 
@@ -187,16 +172,6 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
   "keys": [
     { "id": "key_k1", "name": "Grapple", "color": "#5aa9f0", "x": 9, "y": 2 }
   ],
-
-  "detail": {
-    "room_y1": {
-      "sub": 8,                   // sub-cells per world cell
-      "boxes": [
-        { "id": "box_b1", "x": 24, "y": 32, "w": 8, "h": 2,
-          "type": "platform", "label": "" }
-      ]
-    }
-  },
 
   "structures": [
     { "id": "struct_s1", "name": "Breakable Wall", "color": "#c9885a",
@@ -252,7 +227,7 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 
 **Edge-structure segments** are `{ x1, y1, x2, y2 }`, any angle. Within one edge structure, segments on the same line that touch or overlap are merged, so the list never repeats a stretch; across edge structures a stretch belongs to at most one (crossings are fine). Segments are stored pointing left to right, or top to bottom when vertical.
 
-**Grey-box boxes** use absolute sub-cell coordinates, i.e. `worldCell * sub`. They aren't relative to the room's bounding box, so repainting the room's cells never shifts its interior geometry. Changing `sub` rescales all boxes to keep them in place.
+**Grey-box data** (`detail`) from older files is dropped on load: 2.0 has no grey-box editor, since rooms are now laid out directly on the map.
 
 **UE import fields** feed the NSProject whitebox importer, which builds sub-level names and FacilityID tags from them (`XianZuCi_Room_B01_LD`).
 `area.region` is an `ENSRegionList` enum name picked from `mvmap-types.js`; it is set from any room's inspector and applies to the whole area.
@@ -293,7 +268,7 @@ src/
   state/            runtime state, undo, storage, snapping, room / door / key edits, off-grid layer edits, pencil
   render/           camera, grid / rooms / doors / keys, structures / edges / stamps / markers, notes, render loop
   tools/            pointer and keyboard input, tool shortcuts
-  ui/               panels, inspector, snap bar, pencil bar, grey-box editor, modals
+  ui/               panels, inspector, snap bar, pencil bar, modals
   io/               JSON import / export, PNG export
   styles/           app.css
 test/               node --test: vocabulary, UE helpers, geometry, 1.x migration
