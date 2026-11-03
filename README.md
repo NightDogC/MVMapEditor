@@ -65,9 +65,11 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Notes** — standalone annotations pinned to a single cell, drawn above everything else (stamps included). Unlike areas, rooms, structures and stamps there's nothing to pick from a list — every note is its own thing. Click a cell with the **Note** tool (`N`) to add one and write its details in the Inspector. The **+** button on the note (or `Enter` while selected) expands it into a translucent text box beside the cell; the box's **−** button collapses it. Drag the open box anywhere (in any tool, Pan included); it keeps that spot after collapsing and reopening, and **Reset box position** in the Inspector puts it back beside the note. The label under the note shows in both states and can be hidden with **Show name on map**. Delete with `Del`, `Alt`-click / right-click remove, or the Inspector; **Show notes** hides them all. Moving a room carries its notes along. (These are separate from the *notes* text field on rooms, structures and stamps.)
 
+**Pencil** — freehand drawing on top of the map, off the grid, for sketches, arrows and quick annotations. Pick a colour (palette or custom) and a brush size in the bar that appears at the top of the map while the **Pencil** (`L`) or **P-Erase** (`Q`) tool is active. Pencil strokes don't belong to any area, room or structure, aren't picked by Select, and don't move with rooms. **P-Erase** — or `Alt` / right-click remove with the Pencil — rubs out pencil ink only, cutting strokes where the eraser passes; it never touches rooms, structures or anything else. **Clear all** in the bar removes every stroke (undoable). Strokes are saved with the map and included in export and PNG; **Show pencil drawings** in Options hides them.
+
 **Hand-placed markers** — structures, edge structures and stamps the UE importer won't generate get a marker: `manual` types an orange dashed outline and a **手** badge, 未分类 ones a red dotted outline and a **?** badge. Each connected piece gets its own badge (stamps: every cell); badges hide when cells are under 8 px on screen. **Highlight hand-placed only** in Options fades everything else except rooms. PNG export shows markers and fading as on screen.
 
-**Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
+**Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, pencil drawings, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
 **Right-click** — configurable under Options. *Remove* (default) acts like holding `Alt` with the current tool: erase room or structure cells, clear edges, delete a door, key or stamp; with Select it removes the smallest thing under the pointer, and in grey-box it erases boxes. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
 
@@ -101,6 +103,8 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `P` | Edge structure (drag along grid lines) |
 | `M` | Emoji stamp |
 | `N` | Note |
+| `L` | Pencil |
+| `Q` | Pencil eraser |
 | `[` / `]` | Move selection up / down its list |
 | `Shift` + `[` / `]` | Move selection to top / bottom |
 | `H` or hold `Space` | Pan |
@@ -202,6 +206,10 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
       "notes": "", "cells": ["6,4"] }
   ],
 
+  "pencil": [
+    { "id": "pen_p1", "color": "#f0dc3a", "size": 3, "pts": [96, 128, 112.5, 131, 140, 150] }
+  ],
+
   "notes": [
     { "id": "note_n1", "name": "Boss door", "text": "Opens after the Grapple fight.\nCheck the softlock.",
       "color": "#f0dc3a", "x": 5, "y": 4, "expanded": false }
@@ -226,6 +234,8 @@ Mouse: scroll to zoom, middle-drag to pan, double-click a room to grey-box it.
 **Structure cells** use the same `"x,y"` keys as rooms, on an independent layer: a cell can be in one room *and* one structure. Each cell belongs to at most one structure; painting it into another moves it.
 
 **Stamp cells** are `"x,y"` keys on their own layer; each cell holds at most one stamp.
+
+**Pencil strokes** are free polylines in world pixels (one grid cell = 32 px, same origin as the grid), stored flat as `[x0, y0, x1, y1, …]`; `size` is the stroke width in world pixels, so drawings scale with the map. A one-point stroke is a dot.
 
 **Notes** sit on cell `(x, y)` in world grid coordinates, at most one per cell. `expanded` is saved with the map, so an open note stays open. `box: { dx, dy }`, when present, is how far the open box was dragged from its default spot beside the note, in screen pixels (the box is drawn at a fixed screen size, so the offset holds at any zoom).
 
@@ -253,6 +263,7 @@ Export always writes all three, with `null` when unset; older files without them
 | localStorage fallback | `mvmap:docs` — all documents, keyed by id |
 | localStorage | `mvmap:last` — id of the last-opened map, restored on load |
 | localStorage | `mvmap:rclick` — right-click behaviour, `remove` or `pan` |
+| localStorage | `mvmap:pencil` — pencil colour, brush size and eraser size |
 | localStorage | `mvmap:stampzoom` — zoom percentage above which stamp names show (default `60`) |
 | localStorage | `mvmap:keys` — custom tool shortcuts, `{ "toolId": "key", … }` |
 
