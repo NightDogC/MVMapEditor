@@ -266,9 +266,12 @@ Export always writes all three, with `null` when unset; older files without them
 
 | | |
 |---|---|
-| IndexedDB | database `mvmap`, object store `maps`, keyed on `id` |
-| localStorage fallback | `mvmap:docs` — all documents, keyed by id |
-| localStorage | `mvmap:last` — id of the last-opened map, restored on load |
+| IndexedDB | database `mvmap2`, object store `maps`, keyed on `id` |
+| localStorage fallback | `mvmap2:docs` — all documents, keyed by id |
+| localStorage | `mvmap2:last` — id of the last-opened map, restored on load |
+| localStorage | `mvmap2:v1-imported` — set once the 1.x library has been copied over |
+
+2.0 keeps its library apart from 1.x (database `mvmap`, `mvmap:docs`, `mvmap:last`), because both can run on the same site (the `/next/` preview) and a 1.x editor must never load a version-2 map and save it back without its geometry. The first time 2.0 starts in a browser it copies every 1.x map into its own library, converted to version 2; the 1.x library is left untouched. The per-browser preferences below are shared by both.
 | localStorage | `mvmap:rclick` — right-click behaviour, `remove` or `pan` |
 | localStorage | `mvmap:pencil` — pencil colour, brush size and eraser size |
 | localStorage | `mvmap:stampzoom` — zoom percentage above which stamp names show (default `60`) |

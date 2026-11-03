@@ -1,6 +1,6 @@
 import "./styles/app.css";
 import { S, app, reindex, migrateDoc } from "./state/store.ts";
-import { Store, setStatus } from "./state/persist.ts";
+import { Store, setStatus, importV1Library, LAST_KEY } from "./state/persist.ts";
 import { loadSnap } from "./state/snap.ts";
 import { newDoc } from "./model/doc.ts";
 import { resizeCanvas, fitWorld } from "./render/view.ts";
@@ -31,9 +31,10 @@ async function boot(): Promise<void> {
 
   await Store.init();
   if (Store.mode !== "idb") $("#file-note").classList.add("show");
+  await importV1Library();
 
   let doc = null;
-  const lastId = prefs.get("mvmap:last");
+  const lastId = prefs.get(LAST_KEY);
   if (lastId) doc = (await Store.all()).find((d) => d.id === lastId) || null;
 
   S.doc = migrateDoc(doc || newDoc());
