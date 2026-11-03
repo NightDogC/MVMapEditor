@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref_name }} # a relay run on v2 must not be cancelled by the main run it starts
   cancel-in-progress: true
 
 jobs:
