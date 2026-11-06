@@ -6,7 +6,7 @@ MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里 manual 类型的
     再用和编辑器画 stamp 完全相同的画法（canvas fillText、同一组 emoji 字体）逐个画出 manual 类型的 emoji，
     导出为带透明通道的 png。浏览器和字体都和编辑器里看到的是同一套，所以图标一致。
 
-    字体组是从 MVMapEditor 的 index.html 里读出来的。编辑器改了 stamp 的画法、找不到这组字体时，
+    字体组是从 MVMapEditor 的源码（src/ 下的 .ts 文件）里读出来的。编辑器改了 stamp 的画法、找不到这组字体时，
     脚本会报错退出，不会悄悄用别的字体。
 
     导出后自动调用 Batches/Python/dilate_alpha.py --dilate-only（在 MVMapEditor 仓库外，按相对本脚本的
@@ -105,16 +105,16 @@ def find_browser() -> Path:
     sys.exit("找不到 Chrome 或 Edge（查过：" + "、".join(str(p) for p in BROWSER_CANDIDATES) + "）。")
 
 
-def read_editor_font_stack(index_html: Path) -> str:
+def read_editor_font_stack(src_dir: Path) -> str:
     """编辑器画 stamp 用的字体组，原样照抄（包括 FONTF 兜底字体）。"""
-    text = index_html.read_text(encoding="utf-8")
+    text = "\n".join(p.read_text(encoding="utf-8") for p in sorted(src_dir.rglob("*.ts")))
     stamp_fonts = STAMP_FONT_PATTERN.findall(text)
     fontf = FONTF_PATTERN.findall(text)
     if not stamp_fonts or not fontf:
-        sys.exit(f"在 {index_html} 里找不到 stamp 的字体写法（ctx.font = `...px \"Segoe UI Emoji\"...`）或 FONTF。"
+        sys.exit(f"在 {src_dir} 里找不到 stamp 的字体写法（ctx.font = `...px \"Segoe UI Emoji\"...`）或 FONTF。"
                  "编辑器改过 stamp 的画法，先更新本脚本里的 STAMP_FONT_PATTERN / FONTF_PATTERN。")
     if len(set(stamp_fonts)) != 1:
-        sys.exit(f"index.html 里 stamp 的字体写法不止一种：{sorted(set(stamp_fonts))}，不知道该用哪个。")
+        sys.exit(f"{src_dir} 里 stamp 的字体写法不止一种：{sorted(set(stamp_fonts))}，不知道该用哪个。")
     return f"{stamp_fonts[0]}, {fontf[0]}"
 
 
@@ -176,7 +176,7 @@ def main() -> int:
         sys.exit("--size 必须是不小于 16 的 2 的次幂。")
 
     browser = find_browser()
-    font_stack = read_editor_font_stack(MVMAP_DIR / "index.html")
+    font_stack = read_editor_font_stack(MVMAP_DIR / "src")
     print(f"浏览器：{browser}")
     print(f"字体：{font_stack}")
 
