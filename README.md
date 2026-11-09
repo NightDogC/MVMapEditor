@@ -26,7 +26,7 @@ The build in `dist/` is static and uses relative paths, so it can be served from
 
 ### Deploying
 
-`.github/workflows/pages.yml` builds the site on every push to `main` or `v2` and deploys it with GitHub Pages (repository **Settings → Pages → Source: GitHub Actions**). `main` is served at the site root; while 2.0 lives on the `v2` branch it is served as a preview under `/next/`. A branch that is a Vite project is built, a plain static one (1.x) is copied as it is. The `v1` branch keeps the single-file 1.x editor.
+`.github/workflows/pages.yml` builds the site on every push to `main` and deploys it with GitHub Pages (repository **Settings → Pages → Source: GitHub Actions**). The `v1` branch keeps the single-file 1.x editor.
 
 ---
 
@@ -246,7 +246,7 @@ Export always writes all three, with `null` when unset; older files without them
 | localStorage | `mvmap2:last` — id of the last-opened map, restored on load |
 | localStorage | `mvmap2:v1-imported` — set once the 1.x library has been copied over |
 
-2.0 keeps its library apart from 1.x (database `mvmap`, `mvmap:docs`, `mvmap:last`), because both can run on the same site (the `/next/` preview) and a 1.x editor must never load a version-2 map and save it back without its geometry. The first time 2.0 starts in a browser it copies every 1.x map into its own library, converted to version 2; the 1.x library is left untouched. The per-browser preferences below are shared by both.
+2.0 keeps its library apart from 1.x (database `mvmap`, `mvmap:docs`, `mvmap:last`), so that a 1.x editor on the same site can never load a version-2 map and save it back without its geometry. The first time 2.0 starts in a browser it copies every 1.x map into its own library, converted to version 2; the 1.x library is left untouched. The per-browser preferences below are shared by both.
 | localStorage | `mvmap:rclick` — right-click behaviour, `remove` or `pan` |
 | localStorage | `mvmap:pencil` — pencil colour, brush size and eraser size |
 | localStorage | `mvmap:stampzoom` — zoom percentage above which stamp names show (default `60`) |

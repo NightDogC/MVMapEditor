@@ -1,7 +1,7 @@
 /* Persistence — IndexedDB, falling back to localStorage (file://, Safari private mode).
-   2.0 keeps its own library ("mvmap2"), apart from 1.x ("mvmap"): both editors can be served from the same origin
-   (the Pages preview under /next/), and a 1.x editor must never load a version-2 map and save it back without its
-   geometry. The first time 2.0 starts it copies the 1.x library over, converted; the 1.x data stays as it was. */
+   2.0 keeps its own library ("mvmap2"), apart from 1.x ("mvmap"), so a 1.x editor on the same origin can never load
+   a version-2 map and save it back without its geometry. The first time 2.0 starts it copies the 1.x library over,
+   converted; the 1.x data stays as it was. */
 import type { MapDoc } from "../model/types.ts";
 import { S, migrateDoc } from "./store.ts";
 import { $, prefs } from "../util.ts";

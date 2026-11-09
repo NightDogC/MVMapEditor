@@ -1,11 +1,9 @@
-# GitHub Pages: main at the site root, the v2 branch (MVMap 2.0, while it isn't merged) as a preview under /next/.
-# The same file lives on both branches, so a push to either rebuilds the whole site (deployed from main's run). A branch that is a Vite project
-# (has vite.config.mts) is built; a plain static one (1.x) is copied as it is.
+# GitHub Pages: builds main and serves it at the site root.
 name: Pages
 
 on:
   push:
-    branches: [main, v2]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,65 +12,26 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-${{ github.ref_name }} # a relay run on v2 must not be cancelled by the main run it starts
+  group: pages
   cancel-in-progress: true
 
 jobs:
-  # Only main may deploy to the github-pages environment. A push to another branch just asks for a run on main,
-  # which checks out and builds every branch anyway.
-  relay:
-    if: github.ref != 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
   build:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Check out main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: main
+      - run: npm ci --no-audit --no-fund
 
-      - name: Check out v2 (preview)
-        id: v2
-        continue-on-error: true # the branch goes away once 2.0 is merged
-        uses: actions/checkout@v4
-        with:
-          ref: v2
-          path: v2
-
-      - name: Build site
-        env:
-          HAS_V2: ${{ steps.v2.outcome == 'success' }}
-        run: |
-          set -euo pipefail
-          build() { # $1 checkout dir, $2 output dir
-            mkdir -p "$2"
-            if [ -f "$1/vite.config.mts" ]; then
-              (cd "$1" && npm ci --no-audit --no-fund && npm run build)
-              cp -r "$1/dist/." "$2"
-            else
-              rsync -a --exclude .git --exclude .github "$1/" "$2/"
-            fi
-          }
-          build main site
-          if [ "$HAS_V2" = "true" ]; then build v2 site/next; fi
-          touch site/.nojekyll
+      - run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: dist
 
   deploy:
     needs: build
