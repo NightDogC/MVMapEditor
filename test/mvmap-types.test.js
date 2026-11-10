@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const TYPES = require("../mvmap-types.js");
+const UE = require("../mvmap-ue.js");
 
 test("every region has a unique enum name and letter, and the letter matches its label prefix", () => {
   const regions = TYPES.regions;
@@ -41,8 +42,23 @@ test("old ids never clash with a current id or another type's old id, so a renam
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test("the importer's auto types are Landscape, DamageTerrain (structures) and JumpOffPlatform (edges); every stamp is manual", () => {
+test("the importer's auto types are Landscape, DamageTerrain (structures), JumpOffPlatform and MapConnection (edges); every stamp is manual", () => {
   const auto = TYPES.types.filter((t) => t.generate === "auto").map((t) => `${t.layer}:${t.id}`).sort();
-  assert.deepEqual(auto, ["edge:JumpOffPlatform", "structure:DamageTerrain", "structure:Landscape"]);
+  assert.deepEqual(auto, ["edge:JumpOffPlatform", "edge:MapConnection", "structure:DamageTerrain", "structure:Landscape"]);
   assert.ok(TYPES.types.some((t) => t.layer === "stamp"));
+});
+
+test("an untyped edge named 地图联通 (as in maps drawn before the type existed) migrates to MapConnection; other layers don't", () => {
+  const doc = {
+    structures: [{ id: "s1", name: "地图联通", rects: [] }],
+    edgeStructs: [
+      { id: "e1", name: "地图联通", segs: [] },
+      { id: "e2", name: "地图联通", typeId: null, segs: [] },
+    ],
+  };
+  const out = UE.migrateTypeIds(doc, TYPES.types);
+  assert.equal(out.edgeStructs[0].typeId, "MapConnection");
+  assert.equal(out.edgeStructs[1].typeId, null, "picked 未分类 by hand: kept");
+  assert.equal(out.structures[0].typeId, undefined);
+  assert.equal(UE.manualMarkOf(out.edgeStructs[0], "edge", TYPES.types), null);
 });

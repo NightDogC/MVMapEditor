@@ -34,10 +34,10 @@
          oldIds    - （可选）这个类型以前用过的 id。加载文件时，typeId 是旧 id 的元素自动改成新 id
          oldLabels - （可选）以前用过的显示名。没有 typeId 的旧元素，名字和它完全一致时也归为这个类型
          layer    - 适用图层：structure（格子）/ edge（格边）/ stamp（单格标记）。下拉框只列出当前图层的类型
-         generate - auto：导入时生成对应的项目类；manual：只生成占位标记，由人工摆放
+         generate - auto：导入工具按它生成东西（项目类，或像地图联通那样用来算 Volume）；manual：只生成占位标记，由人工摆放
          color / emoji - 新建元素（名字还是 "Structure 1" 这类默认名、还没选过类型）选这个类型时，
                          名字换成 label，颜色和 emoji（emoji 只对 stamp 生效）换成这里的值；其他情况选类型只改类型
-       不在这里的名字（如"地图联通"）加载后显示"未分类"，导出时不写 typeId。 */
+       不在这里的名字加载后显示"未分类"，导出时不写 typeId。 */
     types: [
       // ── structure ──
       { id: "Landscape", label: "地形", layer: "structure", generate: "auto", color: "#7c879b", emoji: "🧱", oldIds: ["Wall"], oldLabels: ["墙体"] }, // 生成 BP_Ground，矩形合并（2026-10-21 由 Wall/墙体 改名）
@@ -49,6 +49,7 @@
       { id: "ArenaGate", label: "战斗门", layer: "structure", generate: "manual", color: "#ef6fb5", emoji: "⚔️" }, // 人工摆放
       // ── edge ──
       { id: "JumpOffPlatform", label: "可下落平台", layer: "edge", generate: "auto", color: "#f0dc3a", emoji: "⬇️" }, // 生成 BP_JumpOffPlatform，连续的边合并
+      { id: "MapConnection", label: "地图联通", layer: "edge", generate: "auto", color: "#5ad07a", emoji: "🔀" }, // 房间出入口，UE 导入时用作相机 Volume 的边界；水平、竖直都可以，斜线不用
       { id: "OneWayDoorBreakableSide", label: "单向门可破坏侧", layer: "edge", generate: "manual", color: "#e0555f", emoji: "💥" }, // 人工摆放
       { id: "MovableJumpOffPlatformStart", label: "可移动下落平台-起点", layer: "edge", generate: "manual", color: "#d5c972", emoji: "⬅️" }, // 人工摆放
       { id: "MovableJumpOffPlatformEnd", label: "可移动下落平台-终点", layer: "edge", generate: "manual", color: "#5a542a", emoji: "➡️" }, // 人工摆放

@@ -296,7 +296,7 @@ test("manualMarkOf marks manual-type elements and leaves auto-type elements unma
 });
 
 test("manualMarkOf marks elements with no usable type as unclassified: missing, null, unknown, or another layer's type", () => {
-  assert.equal(UE.manualMarkOf({ name: "地图联通" }, "edge", TYPES), "unclassified");
+  assert.equal(UE.manualMarkOf({ name: "Some edge" }, "edge", TYPES), "unclassified");
   assert.equal(UE.manualMarkOf({ typeId: null }, "structure", TYPES), "unclassified");
   assert.equal(UE.manualMarkOf({ typeId: "Foo" }, "stamp", TYPES), "unclassified");
   assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "structure", TYPES), "unclassified");
