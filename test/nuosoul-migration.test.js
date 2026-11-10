@@ -27,7 +27,7 @@ const EXPECTED = {
   "structure:struct_8jcfvwm1jb": "ArenaGate", // 战斗门
   "edge:edge_68ys8zzp06": "OneWayDoorBreakableSide", // 单向门可破坏侧
   "edge:edge_kp4p05hs3u": "JumpOffPlatform", // 可下落平台
-  "edge:edge_vksb8vt3g9": null, // 地图联通; not agreed with the designers yet
+  "edge:edge_vksb8vt3g9": "MapConnection", // 地图联通; unclassified until 2026-11-10, migrated by its label
   "edge:edge_omlrq7812m": "MovableJumpOffPlatformStart", // 可移动下落平台-起点
   "edge:edge_rav0bfxe5d": "MovableJumpOffPlatformEnd", // 可移动下落平台-终点
   "stamp:stamp_x3pdepqoz2": "JudgeMask", // 判官面具
