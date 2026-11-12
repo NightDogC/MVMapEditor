@@ -70,7 +70,7 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 
 **Pencil** — freehand drawing on top of the map, off the grid, for sketches, arrows and quick annotations. Pick a colour (palette or custom) and a brush size in the bar that appears at the top of the map while the **Pencil** (`L`) or **P-Erase** (`Q`) tool is active. Pencil strokes don't belong to any area, room or structure, aren't picked by Select, and don't move with rooms. **P-Erase** — or `Ctrl` / right-click remove with the Pencil — rubs out pencil ink only, cutting strokes where the eraser passes; it never touches rooms, structures or anything else. **Clear all** in the bar removes every stroke (undoable). Strokes are saved with the map and included in export and PNG; **Show pencil drawings** in Options hides them.
 
-**Hand-placed markers** — structures, edge structures and stamps the UE importer won't generate get a marker: `manual` types an orange dashed outline and a **手** badge, 未分类 ones a red dotted outline and a **?** badge. Each connected piece gets its own badge (stamps: every copy); badges hide when cells are under 8 px on screen. **Highlight hand-placed only** in Options fades everything else except rooms. PNG export shows markers and fading as on screen.
+**Hand-placed markers** — structures, edge structures and stamps the UE importer won't generate get a marker: `manual` types an orange dashed outline and a **手** badge, 未分类 and 未选完 ones a red dotted outline and a **?** badge. Each connected piece gets its own badge (stamps: every copy); badges hide when cells are under 8 px on screen. **Highlight hand-placed only** in Options fades everything else except rooms. PNG export shows markers and fading as on screen.
 
 **Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, pencil drawings, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
@@ -182,8 +182,28 @@ Mouse: scroll to zoom, middle-drag to pan.
   "stamps": [
     { "id": "stamp_m1", "name": "Save Point", "emoji": "💾", "color": "#5aa9f0",
       "notes": "", "typeId": "SavePoint", "anchor": "SnapToGround",   // UE import fields, see below
-      "points": [ { "id": "pt_a1", "x": 6, "y": 4 }, { "id": "pt_a2", "x": 9.25, "y": 2.5 } ] }
+      "points": [ { "id": "pt_a1", "x": 6, "y": 4 }, { "id": "pt_a2", "x": 9.25, "y": 2.5 } ] },
+    { "id": "stamp_m2", "name": "钱盒", "emoji": "💰", "color": "#5aa9f0",
+      "notes": "", "typeId": "MoneyBox", "tier": "Large", "anchor": "SnapToGround",
+      "points": [ { "id": "pt_b1", "x": 12, "y": 4 } ] },
+    { "id": "stamp_m3", "name": "Stamp 3", "emoji": "👾", "color": "#5fd8cf",   // 未选完: no typeId, see below
+      "notes": "", "typeGroup": "Enemy", "tier": "Elite", "anchor": "SnapToGround",
+      "points": [ { "id": "pt_c1", "x": 14, "y": 4 } ] }
   ],
+
+  "stampCategories": {            // this map's stamp types, see below; the defaults are in mvmap-types.js
+    "groups": [
+      { "id": "Enemy", "label": "敌人",
+        "tier": { "label": "强弱", "values": [ { "id": "Weak", "label": "弱小" }, { "id": "Medium", "label": "中等" }, { "id": "Elite", "label": "精英" } ] } }
+    ],
+    "types": [
+      { "id": "SavePoint", "label": "傩公傩母像", "generate": "auto", "color": "#7c879b", "emoji": "💾" },
+      { "id": "MoneyBox", "label": "钱盒", "generate": "auto", "color": "#5aa9f0", "emoji": "💰",
+        "tier": { "label": "大小", "values": [ { "id": "Small", "label": "小" }, { "id": "Medium", "label": "中" }, { "id": "Large", "label": "大" } ] } },
+      { "id": "MeleeEnemy", "label": "近战", "group": "Enemy", "generate": "auto", "color": "#5fd8cf", "emoji": "👾",
+        "anchor": "SnapToGround", "anchorLocked": true }
+    ]
+  },
 
   "pencil": [
     { "id": "pen_p1", "color": "#f0dc3a", "size": 3, "pts": [96, 128, 112.5, 131, 140, 150] }
@@ -234,8 +254,9 @@ Mouse: scroll to zoom, middle-drag to pan.
 `area.region` is an `ENSRegionList` enum name picked from `mvmap-types.js`; it is set from any room's inspector and applies to the whole area.
 `area.letter` is that region's letter, written on export only. `room.number` is a positive integer, unique within its area; the room's code is the letter plus the number padded to two digits (`B01`).
 Export always writes all three, with `null` when unset; older files without them load fine. Duplicate numbers in an area, or unknown regions, are reported when a map is imported or opened from the library, and again on export.
-`typeId` on structures, edge structures and stamps is a type id from `mvmap-types.js`, picked in the inspector's Type dropdown (only that layer's types are offered); the element's name is display only. An element with no `typeId` field gets one when a map is loaded, if its name is exactly a type's label for that layer; otherwise it is listed in red as 未分类. `typeId: null` (elements created in the editor, or 未分类 picked by hand) is never re-guessed from the name. A renamed type keeps its old ids and labels in `oldIds` / `oldLabels`: on load, a `typeId` that is an old id becomes the current id, and an untyped element named with an old label is classified too (e.g. `Wall` / 墙体 → `Landscape` / 地形). Picking a type for a new element that still has its default name (`Structure 1`, `Platform 1`, `Stamp 1`) also gives it the type's label, colour and (stamps) emoji. Export writes `typeId` only when it is a type of the element's layer, and leaves the field out otherwise. Types with a `group` (钱盒 → 大 / 中 / 小, 阴阳雕像 → 阴 / 阳, 敌人 → 弱小·地面 …) are picked in two steps: the group in **Type**, then the type inside it (`subLabel`) in **Subtype**; types without a group (地形 …) keep a single dropdown. An element with only its group picked stores `typeId: null` plus `typeGroup` (the group name): it is still 未分类 — listed in red as `钱盒（未选小类）` — and export leaves out `typeId` but keeps `typeGroup`, so importing the file back restores the group. A type that was split in two or more keeps no `oldIds`, so elements of the old type open without a type and the designer picks the new one; when the new types have a group, the old id goes in `groupOldIds` instead (`MoneyBox` → 钱盒, `YinYangStatue` → 阴阳雕像, `MediumMeleeEnemy` / `EliteEnemy` → 敌人), and those elements open with that group already picked.
-`anchor` on stamps says how UE places the object: `SnapToGround` (on the ground found below the marker box) or `FloatInAir` (at the bottom of the box). It is picked in the inspector's Anchor dropdown; a new stamp, or one loaded without an `anchor`, gets its type's default (`anchor` in `mvmap-types.js`, else `SnapToGround`). Types with `anchorLocked` (the enemies: ground or flying) fix it: the dropdown is hidden and export always writes the type's anchor. Export writes `anchor` on every stamp.
+`typeId` on structures and edge structures is a type id from `mvmap-types.js`, picked in the inspector's Type dropdown (only that layer's types are offered); the element's name is display only. An element with no `typeId` field gets one when a map is loaded, if its name is exactly a type's label for that layer; otherwise it is listed in red as 未分类. `typeId: null` (elements created in the editor, or 未分类 picked by hand) is never re-guessed from the name. A renamed type keeps its old ids and labels in `oldIds` / `oldLabels`: on load, a `typeId` that is an old id becomes the current id, and an untyped element named with an old label is classified too (e.g. `Wall` / 墙体 → `Landscape` / 地形). Picking a type for a new element that still has its default name (`Structure 1`, `Platform 1`, `Stamp 1`) also gives it the type's label, colour and (stamps) emoji. Export writes `typeId` only when it is a type of the element's layer, and leaves the field out otherwise.
+**Stamp categories** (`stampCategories`) are stored in each map, so every map has its own: a map without them (new maps, files from before them) gets a copy of `defaultStampCategories` from `mvmap-types.js` when it is loaded, and a map that has them keeps them. They have three levels, each optional: a **group** (敌人), a **type** (近战; its `id` is the stamp's `typeId`), and a **tier** (强弱: 弱小 / 中等 / 精英) defined by a group for all its types, or by a type without a group (钱盒: 大小). Groups, types and tier values have ids: a stamp stores the type's id in `typeId`, the group's id in `typeGroup` (only while no type inside it is picked), and the tier value's id in `tier`. The inspector shows **Type** (types and groups ▸), then **Subtype** for a group, then a dropdown titled with the tier's name; dropdowns that don't apply are not shown. Switching to a type that picks from the same tier (another type of the same group) keeps the tier value; any other switch clears it. Picking a tier value adds it to a name the editor gave (`钱盒` → `钱盒·中`, `敌人·近战` → `敌人·近战·精英`) and replaces the previous value there; a name typed by hand is kept. A stamp is **complete** once it has its type and, if the type has a tier, a tier value; with a group or type picked but not everything, it is **未选完** and listed in red with what is missing (`钱盒（未选大小）`, `敌人（未选小类、强弱）`); with neither it is 未分类. An id that isn't in the map's categories (a hand-edited file) counts as not picked. Export writes `typeId` on complete stamps only, and `tier` whenever it is a value of the stamp's tier. An incomplete stamp keeps what was picked: `typeGroup`, a valid `tier`, and its type as `pendingTypeId`, which the UE importer doesn't read and which loading the file turns back into `typeId`. Stamps saved before the categories carry old typeIds; `oldStampIds` in `mvmap-types.js` maps each to a group / type / tier value (`MediumMeleeEnemy` → 敌人·近战 + 中等, `EliteEnemy` → 敌人 + 精英), falling back to whatever level the map's categories still have. `MoneyBox` and `YinYangStatue` kept their typeId, so those stamps open with only the tier left to pick. Until the category panel exists, categories can be changed by editing the exported JSON and importing it back.
+`anchor` on stamps says how UE places the object: `SnapToGround` (on the ground found below the marker box) or `FloatInAir` (at the bottom of the box). It is picked in the inspector's Anchor dropdown; a new stamp, or one loaded without an `anchor`, gets its type's default (the type's `anchor` in the stamp categories, else `SnapToGround`). Types with `anchorLocked` (the enemies: ground or flying) fix it: the dropdown is hidden and export always writes the type's anchor. Export writes `anchor` on every stamp.
 
 **Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library. The map that was open becomes the newest undo step, so `Ctrl+Z` straight after an import brings it back.
 
@@ -261,7 +282,8 @@ Export always writes all three, with `null` when unset; older files without them
 
 ```
 index.html          page shell; loads the two scripts below, then src/main.ts
-mvmap-types.js      vocabulary shared with the UE importer (regions, element types); edit this, not the app
+mvmap-types.js      vocabulary shared with the UE importer (regions, structure / edge types, default stamp categories,
+                    old stamp ids); edit this, not the app
 mvmap-ue.js         pure helpers for the UE import fields (validation, room code, element types, export shape)
 src/
   model/            document types, newDoc, migrate (incl. 1.x -> 2.0), colours and emoji
@@ -273,9 +295,9 @@ src/
   ui/               panels, inspector, snap bar, pencil bar, modals
   io/               JSON import / export, PNG export
   styles/           app.css
-test/               node --test: vocabulary, UE helpers, geometry, 1.x migration, stamp point ids, two-level type picker
+test/               node --test: vocabulary, UE helpers, geometry, 1.x migration, stamp point ids, stamp categories
 docs/2.0-design.md  2.0 design decisions
-export_mvmap_stamp_icons.py   renders the emoji of every stamp type and of manual structure / edge types as UE placeholder icons (reads the stamp font from src/)
+export_mvmap_stamp_icons.py   renders the emoji of every default stamp type and of manual structure / edge types as UE placeholder icons (reads the stamp font from src/)
 ```
 
 ---

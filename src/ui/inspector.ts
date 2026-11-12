@@ -12,7 +12,7 @@ import { orderScope, reorderSel } from "../state/order.ts";
 import { area, bbox } from "../geom/region.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS, fromT } from "../geom/lattice.ts";
-import { UE, REGIONS, ELEMENT_TYPES, type ElementType } from "../ue.ts";
+import { UE, REGIONS, vocabOf, type ElementType } from "../ue.ts";
 import { setTool } from "../tools/tool.ts";
 import { renderLists } from "./panels.ts";
 import { $, esc } from "../util.ts";
@@ -396,68 +396,87 @@ function inspectLock(host: HTMLElement, l: Lock): void {
 /** Option value of a group in the first-level Type dropdown (type ids are plain words, so they never start with it). */
 const GROUP_VALUE = "group:";
 
-/** "Type" dropdown for structures, edge structures and stamps; only the types of `layer` are offered. Types with a
-    `group` (mvmap-types.js) are picked in two steps: the group in "Type", then the type inside it in "Subtype". Until the
-    subtype is picked the element stays 未分类 (shown red, with the group's name). */
+/** Type picker for structures, edge structures and stamps; only the types of `layer` are offered. Stamps pick from the
+    map's stamp categories in up to three dropdowns, each shown only when it applies: "Type" (a type, or a group ▸),
+    "Subtype" (the type inside the group), and the tier, titled with the tier's name (大小, 强弱). Until every shown
+    dropdown is picked the element is 未选完: shown red with what is missing (UE.statusLabelOf). */
 function typeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): string {
-  const cur = UE.elementTypeOf(it, layer, ELEMENT_TYPES);
-  const group = UE.typeGroupOf(it, layer, ELEMENT_TYPES);
+  const vocab = vocabOf(S.doc);
+  const cur = UE.elementTypeOf(it, layer, vocab);
+  const group = UE.typeGroupOf(it, layer, vocab);
+  const tier = UE.tierOf(it, layer, vocab);
+  const tierValue = UE.tierValueOf(it, layer, vocab);
+  const status = UE.elementStatusOf(it, layer, vocab);
   const unknown = it.typeId != null && !cur && !group;
-  const entries = UE.typePickerEntries(ELEMENT_TYPES, layer);
-  const hint = cur
-    ? cur.generate === "auto"
-      ? "UE import generates this element"
-      : "UE import leaves a placeholder — placed by hand"
-    : group
-      ? `${esc(group)}（未选小类）— pick a subtype for the UE importer`
-      : unknown
-        ? "Not a type of this layer in mvmap-types.js — counts as 未分类"
-        : "未分类 — pick a type for the UE importer";
-  const hintDiv = `<div class="meta ${cur ? "" : "err"}">${hint}</div>`;
+  const hint =
+    status === "complete"
+      ? cur!.generate === "auto"
+        ? "UE import generates this element"
+        : "UE import leaves a placeholder — placed by hand"
+      : status === "incomplete"
+        ? `${esc(UE.statusLabelOf(it, layer, vocab))} — finish picking for the UE importer`
+        : unknown
+          ? `Not a ${layer === "stamp" ? "stamp type of this map" : "type of this layer in mvmap-types.js"} — counts as 未分类`
+          : "未分类 — pick a type for the UE importer";
   const typeOption = (t: ElementType, text: string) =>
     `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(text)} · ${t.generate}</option>`;
-  const members = group ? UE.typesForLayer(ELEMENT_TYPES, layer).filter((t) => t.group === group) : [];
-  const subField = group
-    ? `<div class="fld"><label>Subtype</label><select id="i-subtype">
-      ${cur ? "" : `<option value="" selected>— 选小类 —</option>`}
-      ${members.map((t) => typeOption(t, t.subLabel || t.label)).join("")}
-    </select>${hintDiv}</div>`
-    : "";
-  return `<div class="fld"><label>Type</label><select id="i-type">
+  // label + <select> of each dropdown shown, top to bottom; the hint goes under the last one
+  const fields = [
+    `<label>Type</label><select id="i-type">
       <option value="" ${cur || unknown || group ? "" : "selected"}>— 未分类 —</option>
       ${unknown ? `<option value="${esc(it.typeId)}" selected>unknown: ${esc(it.typeId)}</option>` : ""}
-      ${entries
+      ${UE.typePickerEntries(vocab, layer)
         .map((e) =>
           e.group !== undefined
-            ? `<option value="${esc(GROUP_VALUE + e.group)}" ${group === e.group ? "selected" : ""}>${esc(e.types[0].emoji)} ${esc(e.group)} ▸</option>`
+            ? `<option value="${esc(GROUP_VALUE + e.group.id)}" ${group === e.group ? "selected" : ""}>${esc(e.types[0]?.emoji ?? "")} ${esc(e.group.label)} ▸</option>`
             : typeOption(e.type, e.type.label),
         )
         .join("")}
-    </select>${group ? "" : hintDiv}</div>${subField}`;
+    </select>`,
+  ];
+  if (group) {
+    fields.push(`<label>Subtype</label><select id="i-subtype">
+      ${cur ? "" : `<option value="" selected>— 选小类 —</option>`}
+      ${UE.groupMembers(vocab, layer, group.id).map((t) => typeOption(t, t.label)).join("")}
+    </select>`);
+  }
+  if (tier) {
+    fields.push(`<label>${esc(tier.label)}</label><select id="i-tier">
+      ${tierValue ? "" : `<option value="" selected>— 未选 —</option>`}
+      ${tier.values.map((v) => `<option value="${esc(v.id)}" ${tierValue === v ? "selected" : ""}>${esc(v.label)}</option>`).join("")}
+    </select>`);
+  }
+  fields[fields.length - 1] += `<div class="meta ${status === "complete" ? "" : "err"}">${hint}</div>`;
+  return fields.map((f) => `<div class="fld">${f}</div>`).join("");
 }
 function bindTypeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): void {
+  const vocab = vocabOf(S.doc);
   const apply = (next: Structure | EdgeStruct | Stamp) => {
     // re-picked the current entry, the "unknown" one, or the group the element is already in
-    if (next.typeId === it.typeId && (next.typeGroup ?? null) === (it.typeGroup ?? null)) return;
+    const same = (k: "typeId" | "typeGroup" | "tier") => ((next as Stamp)[k] ?? null) === ((it as Stamp)[k] ?? null);
+    if (same("typeId") && same("typeGroup") && same("tier")) return;
     pushUndo();
-    if (next.typeGroup === undefined) delete it.typeGroup; // chooseType drops it; Object.assign alone would keep it
+    for (const k of Object.keys(it)) if (!(k in next)) delete (it as unknown as Record<string, unknown>)[k]; // the choose* functions drop keys to clear them
     Object.assign(it, next);
     commit();
   };
   $<Sl>("#i-type").onchange = (e) => {
     const v = (e.target as Sl).value;
-    apply(v.startsWith(GROUP_VALUE) ? UE.chooseTypeGroup(it, layer, v.slice(GROUP_VALUE.length), ELEMENT_TYPES) : UE.chooseType(it, layer, v, ELEMENT_TYPES));
+    apply(v.startsWith(GROUP_VALUE) ? UE.chooseTypeGroup(it, layer, v.slice(GROUP_VALUE.length), vocab) : UE.chooseType(it, layer, v, vocab));
   };
   const sub = q<Sl>("#i-subtype");
-  if (sub) sub.onchange = () => sub.value && apply(UE.chooseType(it, layer, sub.value, ELEMENT_TYPES));
+  if (sub) sub.onchange = () => sub.value && apply(UE.chooseType(it, layer, sub.value, vocab));
+  const tier = q<Sl>("#i-tier");
+  if (tier) tier.onchange = () => tier.value && apply(UE.chooseTier(it, layer, tier.value, vocab));
 }
 
 const ANCHOR_LABELS: Record<StampAnchor, string> = { SnapToGround: "贴地 — on the ground below the box", FloatInAir: "悬空 — at the bottom of the box" };
 
 /** "Anchor" dropdown for a stamp: how UE places its object. Hidden when the stamp's type fixes the anchor (enemies). */
 function anchorField(st: Stamp): string {
-  if (UE.isStampAnchorLocked(st, ELEMENT_TYPES)) return "";
-  const cur = UE.stampAnchorOf(st, ELEMENT_TYPES);
+  const vocab = vocabOf(S.doc);
+  if (UE.isStampAnchorLocked(st, vocab)) return "";
+  const cur = UE.stampAnchorOf(st, vocab);
   return `<div class="fld"><label>Anchor</label><select id="i-anchor">
       ${UE.STAMP_ANCHORS.map((a) => `<option value="${a}" ${a === cur ? "selected" : ""}>${esc(ANCHOR_LABELS[a])}</option>`).join("")}
     </select></div>`;

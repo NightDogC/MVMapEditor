@@ -117,15 +117,27 @@ test("hasStampPointWithoutId tells whether loading would hand out new point ids 
   assert.equal(hasStampPointWithoutId({}), false);
 });
 
+/** The editor's load (state/store.ts migrateDoc). */
+const load = (x: unknown) => migrate(x, (d) => UE.migrateTypeData(d, TYPES));
+
 test("migrate with the vocabulary fills each stamp's anchor: the type's default, a locked type's anchor, SnapToGround when untyped", () => {
-  const load = (x: unknown) => migrate(x, (d) => UE.migrateStampAnchors(UE.migrateTypeIds(d, TYPES.types, TYPES.groupOldIds), TYPES.types));
   const st = (id: string, typeId: string, anchor?: string) => ({ id, name: id, emoji: "⭐", color: "#fff", notes: "", typeId, anchor, points: [] });
   const d = load({
-    stamps: [st("a", "SavePoint"), st("b", "WeakFlyingEnemy"), st("c", "MoneyBox"), st("d", "MoneyBoxLarge", "FloatInAir"), st("e", "EnemyWeakFlying", "SnapToGround")],
+    stamps: [st("a", "SavePoint"), st("b", "WeakFlyingEnemy"), st("c", "MoneyBox", "FloatInAir"), st("d", "FlyingEnemy", "SnapToGround"), st("e", "Unknown", "FloatInAir")],
   });
-  assert.deepEqual(d.stamps.map((s) => s.anchor), ["SnapToGround", "FloatInAir", "SnapToGround", "FloatInAir", "FloatInAir"]);
-  assert.equal(d.stamps[1].typeId, "EnemyWeakFlying", "renamed before the anchor is filled");
-  assert.deepEqual([d.stamps[2].typeId, d.stamps[2].typeGroup], [null, "钱盒"], "split type: group picked, still unclassified");
+  assert.deepEqual(d.stamps.map((s) => s.anchor), ["SnapToGround", "FloatInAir", "FloatInAir", "FloatInAir", "FloatInAir"]);
+  assert.deepEqual([d.stamps[1].typeId, d.stamps[1].tier], ["FlyingEnemy", "Weak"], "old id migrated before the anchor is filled");
+});
+
+test("loading gives a document without stamp categories the defaults, keeps a document's own, and keeps the version", () => {
+  const fresh = load(v1());
+  assert.deepEqual(fresh.stampCategories, TYPES.defaultStampCategories);
+  assert.equal(fresh.version, 2);
+  const own = { groups: [], types: [{ id: "T_1", label: "Mine", generate: "manual", color: "#000000", emoji: "m" }] };
+  const mine = load({ ...v1(), stampCategories: own, stamps: [{ id: "m", name: "x", emoji: "⭐", color: "#fff", notes: "", typeId: "T_1", points: [] }] });
+  assert.deepEqual(mine.stampCategories, own);
+  assert.equal(mine.stamps[0].typeId, "T_1");
+  assert.deepEqual(load(JSON.parse(JSON.stringify(fresh))), fresh, "loading again changes nothing");
 });
 
 test("grey-box data from older files is dropped on load", () => {

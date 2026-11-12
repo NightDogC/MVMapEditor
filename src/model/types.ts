@@ -83,10 +83,11 @@ interface Element {
   name: string;
   color: string;
   notes: string;
-  /** element type from mvmap-types.js; null = unclassified */
+  /** element type: a structure / edge type from mvmap-types.js, a stamp type from the document's stampCategories;
+      null = unclassified */
   typeId?: string | null;
-  /** two-level type picker: a group (mvmap-types.js `group`) picked without a type inside it yet. Only meaningful while
-      typeId is null; the element is still unclassified and exported without typeId (mvmap-ue.js chooseTypeGroup) */
+  /** stamps: id of a group of the stamp categories, picked without a type inside it yet. Only stored while typeId is
+      null (the group otherwise comes from the type); exported without typeId (mvmap-ue.js chooseTypeGroup) */
   typeGroup?: string | null;
   hideName?: boolean;
 }
@@ -107,6 +108,42 @@ export interface Stamp extends Element {
   points: Pt[];
   /** filled on load from the type's default (mvmap-ue.js stampAnchorOf); a type with anchorLocked overrides it */
   anchor?: StampAnchor;
+  /** id of a value of the tier the stamp picks from (its group's, or its type's); see mvmap-ue.js tierOf */
+  tier?: string | null;
+}
+
+/** Stamp categories, stored in the document and edited by designers; shape documented in mvmap-types.js
+    defaultStampCategories. Group -> type (exported as typeId) -> tier, every level optional. */
+export interface TierValue {
+  id: string;
+  label: string;
+}
+export interface Tier {
+  /** the tier's name, the title of its dropdown (大小, 强弱) */
+  label: string;
+  values: TierValue[];
+}
+export interface StampGroup {
+  id: string;
+  label: string;
+  tier?: Tier;
+}
+export interface StampType {
+  id: string;
+  label: string;
+  /** id of its StampGroup */
+  group?: string;
+  generate: "auto" | "manual";
+  color: string;
+  emoji: string;
+  anchor?: StampAnchor;
+  anchorLocked?: boolean;
+  /** only on a type without a group: a type in a group picks from the group's tier */
+  tier?: Tier;
+}
+export interface StampCategories {
+  groups: StampGroup[];
+  types: StampType[];
 }
 
 export interface Note {
@@ -146,6 +183,8 @@ export interface MapDoc {
   stamps: Stamp[];
   notes: Note[];
   pencil: PencilStroke[];
+  /** filled on load (the defaults of mvmap-types.js when the file has none), so absent only before migrateDoc */
+  stampCategories?: StampCategories;
 }
 
 export type ElementLayer = "structure" | "edge" | "stamp";

@@ -15,7 +15,8 @@ MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里会生成占位�
 
 输出：
     <输出目录>/T_Emoji_MVMap_<typeId>.png，例如 T_Emoji_MVMap_SavePoint.png。导出的类型：
-    - 全部 stamp，manual 和 auto 都导出：auto 的 stamp（存档点、钱盒、敌人等）生成游戏物体时也保留一个占位，挂在生成物下面；
+    - 全部 stamp，manual 和 auto 都导出：auto 的 stamp（存档点、钱盒、敌人等）生成游戏物体时也保留一个占位，挂在生成物下面。
+      stamp 的类型取自 mvmap-types.js 的默认分类（defaultStampCategories），策划在地图文件里新建的类型还不会导出；
     - manual 的 structure / edge 类型（如单向门、隐藏区域）。它们在编辑器地图上不画 emoji，用的是词表里给它们配的 emoji，
       画法和 stamp 相同。auto 的 structure / edge 类型（地形、可下落平台等）不生成占位，不导出。
 
@@ -81,7 +82,8 @@ PAGE_TEMPLATE = """<!doctype html>
   try {{
     await document.fonts.load(font);
   }} catch (e) {{}}
-  for (const t of MVMapTypes.types.filter((x) => x.generate === "manual" || x.layer === "stamp")) {{
+  const stampTypes = MVMapTypes.defaultStampCategories.types;
+  for (const t of [...stampTypes, ...MVMapTypes.types.filter((x) => x.generate === "manual")]) {{
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext("2d");

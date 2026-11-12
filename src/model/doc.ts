@@ -106,8 +106,9 @@ export function hasStampPointWithoutId(input: unknown): boolean {
 }
 
 /** Normalise anything loaded from disk/db so missing fields can't crash the editor, converting 1.x grid-cell
-    structures / edge structures / stamps to version-2 geometry on the way, and giving stamp points without an id one. `migrateTypes` is UE.migrateTypeIds
-    bound to the vocabulary (left out by tests that don't load it). */
+    structures / edge structures / stamps to version-2 geometry on the way, and giving stamp points without an id one. `migrateTypes` is
+    UE.migrateTypeData bound to the vocabulary: stamp categories, old type ids, stamp anchors (left out by tests that
+    don't load it). */
 export function migrate(input: unknown, migrateTypes?: (d: MapDoc) => MapDoc): MapDoc {
   const base = newDoc();
   const d = Object.assign({}, base, asObj(input)) as MapDoc & Record<string, any>;

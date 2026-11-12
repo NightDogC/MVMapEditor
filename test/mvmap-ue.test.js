@@ -129,25 +129,27 @@ const TYPES = [
   { id: "Wall", label: "Wall label", layer: "structure", generate: "auto", color: "#111111", emoji: "W" },
   { id: "Door", label: "Door label", layer: "structure", generate: "manual", color: "#222222", emoji: "D" },
   { id: "Ledge", label: "Ledge label", layer: "edge", generate: "auto", color: "#333333", emoji: "L" },
-  { id: "Save", label: "Save label", layer: "stamp", generate: "manual", color: "#444444", emoji: "S" },
 ];
+// stamp types live in the document's stamp categories
+const SAVE_CATEGORIES = { groups: [], types: [{ id: "Save", label: "Save label", generate: "manual", color: "#444444", emoji: "S" }] };
+const V = UE.vocabOf({ stampCategories: SAVE_CATEGORIES }, TYPES);
 
 test("typesForLayer lists only the types for that layer, in vocabulary order", () => {
-  assert.deepEqual(UE.typesForLayer(TYPES, "structure").map((t) => t.id), ["Wall", "Door"]);
-  assert.deepEqual(UE.typesForLayer(TYPES, "edge").map((t) => t.id), ["Ledge"]);
-  assert.deepEqual(UE.typesForLayer(TYPES, "stamp").map((t) => t.id), ["Save"]);
-  assert.deepEqual(UE.typesForLayer(TYPES, "note"), []);
+  assert.deepEqual(UE.typesForLayer(V, "structure").map((t) => t.id), ["Wall", "Door"]);
+  assert.deepEqual(UE.typesForLayer(V, "edge").map((t) => t.id), ["Ledge"]);
+  assert.deepEqual(UE.typesForLayer(V, "stamp").map((t) => t.id), ["Save"]);
+  assert.deepEqual(UE.typesForLayer(V, "note"), []);
 });
 
 test("elementTypeOf returns the element's type when its typeId belongs to that layer", () => {
-  assert.equal(UE.elementTypeOf({ typeId: "Door" }, "structure", TYPES).id, "Door");
-  assert.equal(UE.elementTypeOf({ typeId: "Ledge" }, "edge", TYPES).id, "Ledge");
+  assert.equal(UE.elementTypeOf({ typeId: "Door" }, "structure", V).id, "Door");
+  assert.equal(UE.elementTypeOf({ typeId: "Ledge" }, "edge", V).id, "Ledge");
 });
 
 test("elementTypeOf is null for a missing typeId, an id not in the vocabulary, or a type from another layer", () => {
-  assert.equal(UE.elementTypeOf({ name: "Wall label" }, "structure", TYPES), null);
-  assert.equal(UE.elementTypeOf({ typeId: "Gone" }, "structure", TYPES), null);
-  assert.equal(UE.elementTypeOf({ typeId: "Ledge" }, "structure", TYPES), null);
+  assert.equal(UE.elementTypeOf({ name: "Wall label" }, "structure", V), null);
+  assert.equal(UE.elementTypeOf({ typeId: "Gone" }, "structure", V), null);
+  assert.equal(UE.elementTypeOf({ typeId: "Ledge" }, "structure", V), null);
 });
 
 function typedDoc() {
@@ -162,6 +164,7 @@ function typedDoc() {
       { id: "p1", name: "Save label", cells: [] },
       { id: "p2", name: " Save label", cells: [] },
     ],
+    stampCategories: SAVE_CATEGORIES,
   };
 }
 
@@ -247,7 +250,7 @@ test("migrateTypeIds leaves typeId: null alone — the user picked 'unclassified
   d.structures[0].typeId = null;
   const out = UE.migrateTypeIds(d, TYPES);
   assert.equal(out.structures[0].typeId, null);
-  assert.equal(UE.elementTypeOf(out.structures[0], "structure", TYPES), null);
+  assert.equal(UE.elementTypeOf(out.structures[0], "structure", V), null);
 });
 
 test("defaultElementName numbers new elements per layer", () => {
@@ -257,31 +260,35 @@ test("defaultElementName numbers new elements per layer", () => {
 });
 
 test("chooseType on a brand-new element takes the type's name and colour, and its emoji on stamps only", () => {
-  const s = UE.chooseType({ id: "s9", name: "Structure 8", color: "#000000", emoji: "?", typeId: null }, "structure", "Door", TYPES);
+  const s = UE.chooseType({ id: "s9", name: "Structure 8", color: "#000000", emoji: "?", typeId: null }, "structure", "Door", V);
   assert.deepEqual(s, { id: "s9", name: "Door label", color: "#222222", emoji: "?", typeId: "Door" });
-  const e = UE.chooseType({ name: "Platform 2", color: "#000000" }, "edge", "Ledge", TYPES);
+  const e = UE.chooseType({ name: "Platform 2", color: "#000000" }, "edge", "Ledge", V);
   assert.deepEqual(e, { name: "Ledge label", color: "#333333", typeId: "Ledge" });
-  const p = UE.chooseType({ name: "Stamp 5", color: "#000000", emoji: "?", typeId: null }, "stamp", "Save", TYPES);
+  const p = UE.chooseType({ name: "Stamp 5", color: "#000000", emoji: "?", typeId: null }, "stamp", "Save", V);
   assert.deepEqual(p, { name: "Save label", color: "#444444", emoji: "S", typeId: "Save", anchor: "SnapToGround" });
 });
 
-const ANCHOR_TYPES = [
-  { id: "Box", label: "Box", layer: "stamp", generate: "auto", color: "#111111", emoji: "B" },
-  { id: "Lamp", label: "Lamp", layer: "stamp", generate: "auto", color: "#111111", emoji: "L", anchor: "FloatInAir" },
-  { id: "Bat", label: "Bat", layer: "stamp", generate: "auto", color: "#111111", emoji: "b", anchor: "FloatInAir", anchorLocked: true },
-  { id: "Rat", label: "Rat", layer: "stamp", generate: "auto", color: "#111111", emoji: "r", anchor: "SnapToGround", anchorLocked: true },
-];
+const ANCHOR_CATEGORIES = {
+  groups: [],
+  types: [
+    { id: "Box", label: "Box", generate: "auto", color: "#111111", emoji: "B" },
+    { id: "Lamp", label: "Lamp", generate: "auto", color: "#111111", emoji: "L", anchor: "FloatInAir" },
+    { id: "Bat", label: "Bat", generate: "auto", color: "#111111", emoji: "b", anchor: "FloatInAir", anchorLocked: true },
+    { id: "Rat", label: "Rat", generate: "auto", color: "#111111", emoji: "r", anchor: "SnapToGround", anchorLocked: true },
+  ],
+};
+const ANCHOR_V = UE.vocabOf({ stampCategories: ANCHOR_CATEGORIES }, []);
 
 test("stampAnchorOf: a locked type wins, then the element's own valid anchor, then the type's default, then SnapToGround", () => {
-  assert.equal(UE.stampAnchorOf({ typeId: "Bat", anchor: "SnapToGround" }, ANCHOR_TYPES), "FloatInAir");
-  assert.equal(UE.stampAnchorOf({ typeId: "Box", anchor: "FloatInAir" }, ANCHOR_TYPES), "FloatInAir");
-  assert.equal(UE.stampAnchorOf({ typeId: "Lamp" }, ANCHOR_TYPES), "FloatInAir");
-  assert.equal(UE.stampAnchorOf({ typeId: "Lamp", anchor: "Sideways" }, ANCHOR_TYPES), "FloatInAir");
-  assert.equal(UE.stampAnchorOf({ typeId: "Box" }, ANCHOR_TYPES), "SnapToGround");
-  assert.equal(UE.stampAnchorOf({ typeId: null }, ANCHOR_TYPES), "SnapToGround");
-  assert.equal(UE.isStampAnchorLocked({ typeId: "Rat" }, ANCHOR_TYPES), true);
-  assert.equal(UE.isStampAnchorLocked({ typeId: "Lamp" }, ANCHOR_TYPES), false);
-  assert.equal(UE.isStampAnchorLocked({ typeId: "Gone" }, ANCHOR_TYPES), false);
+  assert.equal(UE.stampAnchorOf({ typeId: "Bat", anchor: "SnapToGround" }, ANCHOR_V), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Box", anchor: "FloatInAir" }, ANCHOR_V), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Lamp" }, ANCHOR_V), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Lamp", anchor: "Sideways" }, ANCHOR_V), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Box" }, ANCHOR_V), "SnapToGround");
+  assert.equal(UE.stampAnchorOf({ typeId: null }, ANCHOR_V), "SnapToGround");
+  assert.equal(UE.isStampAnchorLocked({ typeId: "Rat" }, ANCHOR_V), true);
+  assert.equal(UE.isStampAnchorLocked({ typeId: "Lamp" }, ANCHOR_V), false);
+  assert.equal(UE.isStampAnchorLocked({ typeId: "Gone" }, ANCHOR_V), false);
 });
 
 test("migrateStampAnchors fills a missing or unknown anchor from the type, keeps a valid one, forces locked ones, leaves the input alone", () => {
@@ -292,22 +299,23 @@ test("migrateStampAnchors fills a missing or unknown anchor from the type, keeps
       { id: "c", typeId: "Rat", anchor: "FloatInAir", points: [] },
       { id: "d", typeId: null, anchor: "???", points: [] },
     ],
+    stampCategories: ANCHOR_CATEGORIES,
   };
-  const out = UE.migrateStampAnchors(doc, ANCHOR_TYPES);
+  const out = UE.migrateStampAnchors(doc, []);
   assert.deepEqual(out.stamps.map((s) => s.anchor), ["FloatInAir", "FloatInAir", "SnapToGround", "SnapToGround"]);
   assert.equal(doc.stamps[0].anchor, undefined);
-  assert.deepEqual(UE.migrateStampAnchors({}, ANCHOR_TYPES), {});
+  assert.deepEqual(UE.migrateStampAnchors({}, []), {});
 });
 
 test("chooseType on stamps: locked types set their anchor; leaving a locked type resets it; otherwise the anchor is kept", () => {
   const named = { name: "Wall box", typeId: "Box", anchor: "FloatInAir" };
-  assert.equal(UE.chooseType(named, "stamp", "Lamp", ANCHOR_TYPES).anchor, "FloatInAir", "kept: the user picked it");
-  assert.equal(UE.chooseType({ ...named, anchor: "SnapToGround" }, "stamp", "Lamp", ANCHOR_TYPES).anchor, "SnapToGround", "kept, even against the new default");
-  assert.equal(UE.chooseType(named, "stamp", "Rat", ANCHOR_TYPES).anchor, "SnapToGround", "locked type");
+  assert.equal(UE.chooseType(named, "stamp", "Lamp", ANCHOR_V).anchor, "FloatInAir", "kept: the user picked it");
+  assert.equal(UE.chooseType({ ...named, anchor: "SnapToGround" }, "stamp", "Lamp", ANCHOR_V).anchor, "SnapToGround", "kept, even against the new default");
+  assert.equal(UE.chooseType(named, "stamp", "Rat", ANCHOR_V).anchor, "SnapToGround", "locked type");
   const bat = { name: "Cave bat", typeId: "Bat", anchor: "FloatInAir" };
-  assert.equal(UE.chooseType(bat, "stamp", "Box", ANCHOR_TYPES).anchor, "SnapToGround", "the locked anchor was never the user's");
-  assert.equal(UE.chooseType(bat, "stamp", "", ANCHOR_TYPES).anchor, "SnapToGround", "unclassified by hand");
-  assert.equal(UE.chooseType({ name: "Stamp 3", typeId: null, anchor: "SnapToGround" }, "stamp", "Lamp", ANCHOR_TYPES).anchor, "FloatInAir", "new element: type default");
+  assert.equal(UE.chooseType(bat, "stamp", "Box", ANCHOR_V).anchor, "SnapToGround", "the locked anchor was never the user's");
+  assert.equal(UE.chooseType(bat, "stamp", "", ANCHOR_V).anchor, "SnapToGround", "unclassified by hand");
+  assert.equal(UE.chooseType({ name: "Stamp 3", typeId: null, anchor: "SnapToGround" }, "stamp", "Lamp", ANCHOR_V).anchor, "FloatInAir", "new element: type default");
 });
 
 test("buildExportDoc writes every stamp's effective anchor and keeps point ids", () => {
@@ -316,8 +324,9 @@ test("buildExportDoc writes every stamp's effective anchor and keeps point ids",
       { id: "a", typeId: "Bat", anchor: "SnapToGround", points: [{ id: "pt_1", x: 1, y: 2 }] },
       { id: "b", typeId: "Box", points: [] },
     ],
+    stampCategories: ANCHOR_CATEGORIES,
   };
-  const out = UE.buildExportDoc(doc, [], ANCHOR_TYPES);
+  const out = UE.buildExportDoc(doc, [], []);
   assert.deepEqual(out.stamps.map((s) => s.anchor), ["FloatInAir", "SnapToGround"]);
   assert.deepEqual(out.stamps[0].points, [{ id: "pt_1", x: 1, y: 2 }]);
   assert.equal(doc.stamps[1].anchor, undefined, "the editor document is untouched");
@@ -325,37 +334,37 @@ test("buildExportDoc writes every stamp's effective anchor and keeps point ids",
 
 test("chooseType changes only typeId once the element was renamed, already typed, or carries an unknown typeId", () => {
   const renamed = { name: "My door", color: "#000000", typeId: null };
-  assert.deepEqual(UE.chooseType(renamed, "structure", "Door", TYPES), { name: "My door", color: "#000000", typeId: "Door" });
+  assert.deepEqual(UE.chooseType(renamed, "structure", "Door", V), { name: "My door", color: "#000000", typeId: "Door" });
   const typed = { name: "Structure 8", color: "#000000", typeId: "Wall" };
-  assert.deepEqual(UE.chooseType(typed, "structure", "Door", TYPES), { name: "Structure 8", color: "#000000", typeId: "Door" });
+  assert.deepEqual(UE.chooseType(typed, "structure", "Door", V), { name: "Structure 8", color: "#000000", typeId: "Door" });
   const unknown = { name: "Structure 8", color: "#000000", typeId: "Foo" };
-  assert.deepEqual(UE.chooseType(unknown, "structure", "Door", TYPES), { name: "Structure 8", color: "#000000", typeId: "Door" });
+  assert.deepEqual(UE.chooseType(unknown, "structure", "Door", V), { name: "Structure 8", color: "#000000", typeId: "Door" });
   const otherLayerName = { name: "Platform 1", color: "#000000", typeId: null }; // an edge default name on a structure
-  assert.deepEqual(UE.chooseType(otherLayerName, "structure", "Door", TYPES), { name: "Platform 1", color: "#000000", typeId: "Door" });
+  assert.deepEqual(UE.chooseType(otherLayerName, "structure", "Door", V), { name: "Platform 1", color: "#000000", typeId: "Door" });
 });
 
 test("chooseType with an empty id marks the element unclassified by hand (typeId: null)", () => {
-  assert.deepEqual(UE.chooseType({ name: "Wall label", typeId: "Wall" }, "structure", "", TYPES), { name: "Wall label", typeId: null });
+  assert.deepEqual(UE.chooseType({ name: "Wall label", typeId: "Wall" }, "structure", "", V), { name: "Wall label", typeId: null });
 });
 
 test("chooseType ignores an id that is not a type of the layer, and never mutates its input", () => {
   const el = { name: "Structure 1", color: "#000000", typeId: "Foo" };
-  assert.deepEqual(UE.chooseType(el, "structure", "Foo", TYPES), el);
-  assert.deepEqual(UE.chooseType(el, "structure", "Ledge", TYPES), el);
-  UE.chooseType(el, "structure", "Door", TYPES);
+  assert.deepEqual(UE.chooseType(el, "structure", "Foo", V), el);
+  assert.deepEqual(UE.chooseType(el, "structure", "Ledge", V), el);
+  UE.chooseType(el, "structure", "Door", V);
   assert.deepEqual(el, { name: "Structure 1", color: "#000000", typeId: "Foo" });
 });
 
 test("manualMarkOf marks manual-type elements and leaves auto-type elements unmarked", () => {
-  assert.equal(UE.manualMarkOf({ typeId: "Door" }, "structure", TYPES), "manual");
-  assert.equal(UE.manualMarkOf({ typeId: "Save" }, "stamp", TYPES), "manual");
-  assert.equal(UE.manualMarkOf({ typeId: "Wall" }, "structure", TYPES), null);
-  assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "edge", TYPES), null);
+  assert.equal(UE.manualMarkOf({ typeId: "Door" }, "structure", V), "manual");
+  assert.equal(UE.manualMarkOf({ typeId: "Save" }, "stamp", V), "manual");
+  assert.equal(UE.manualMarkOf({ typeId: "Wall" }, "structure", V), null);
+  assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "edge", V), null);
 });
 
 test("manualMarkOf marks elements with no usable type as unclassified: missing, null, unknown, or another layer's type", () => {
-  assert.equal(UE.manualMarkOf({ name: "Some edge" }, "edge", TYPES), "unclassified");
-  assert.equal(UE.manualMarkOf({ typeId: null }, "structure", TYPES), "unclassified");
-  assert.equal(UE.manualMarkOf({ typeId: "Foo" }, "stamp", TYPES), "unclassified");
-  assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "structure", TYPES), "unclassified");
+  assert.equal(UE.manualMarkOf({ name: "Some edge" }, "edge", V), "unclassified");
+  assert.equal(UE.manualMarkOf({ typeId: null }, "structure", V), "unclassified");
+  assert.equal(UE.manualMarkOf({ typeId: "Foo" }, "stamp", V), "unclassified");
+  assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "structure", V), "unclassified");
 });
