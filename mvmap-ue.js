@@ -418,7 +418,231 @@
     return out;
   }
 
+  /* ── editing the stamp categories ─────────────────────────────────
+     Every edit returns a new document; the input is left as it is. Ids never change: a rename edits only a label, so
+     stamps are untouched. After the edit the stamps are repaired (repairStamps). Emoji and colour edits don't reach
+     placed stamps: a stamp takes them only when it is brand-new and picks the type (chooseType). */
+
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const findIn = (list, id) => (id != null && list.find((x) => x.id === id)) || null;
+
+  /** A fresh id for a group, type or tier value the designer adds: `prefix_` + six random base-36 characters, used by
+      no group, type or tier value of the document (so it is also safe as a UE typeId and an icon file name). */
+  function newCategoryId(doc, prefix) {
+    const c = (doc && doc.stampCategories) || EMPTY_CATEGORIES;
+    const used = new Set();
+    for (const x of [...c.groups, ...c.types]) {
+      used.add(x.id);
+      for (const v of (x.tier && x.tier.values) || []) used.add(v.id);
+    }
+    for (;;) {
+      const id = `${prefix}_${Math.random().toString(36).slice(2).padEnd(6, "0").slice(0, 6)}`;
+      if (!used.has(id)) return id;
+    }
+  }
+
+  /** Clears, on every stamp of `out`, each id that named something in `before`'s categories and no longer does in
+      `out`'s:
+      - its type gone: typeId null; it keeps the type's group (typeGroup) when that group is still there, so it is
+        未选完, else it is 未分类; a type that locked the anchor leaves SnapToGround behind (as chooseType does);
+      - its group gone (a group-only stamp): typeGroup removed;
+      - its tier value no longer a value of the tier it now picks from: tier removed.
+      Ids that were already unknown before the edit stay as they are. Anchors end up as stampAnchorOf says, so a locked
+      type's anchor change reaches its stamps. */
+  function repairStamps(before, out) {
+    const vb = vocabOf(before);
+    const va = vocabOf(out);
+    for (const st of out.stamps || []) {
+      const oldType = elementTypeOf(st, "stamp", vb);
+      const oldGroup = typeGroupOf(st, "stamp", vb);
+      const oldValue = tierValueOf(st, "stamp", vb);
+      if (oldType && !findType(va, "stamp", oldType.id)) {
+        st.typeId = null;
+        if (oldGroup && findGroup(va, "stamp", oldGroup.id)) st.typeGroup = oldGroup.id;
+        if (oldType.anchorLocked) st.anchor = defaultStampAnchor(null);
+      } else if (!oldType && oldGroup && !findGroup(va, "stamp", oldGroup.id)) {
+        delete st.typeGroup;
+      }
+      if (oldValue && !tierValueOf(st, "stamp", va)) delete st.tier;
+      st.anchor = stampAnchorOf(st, va);
+    }
+    return out;
+  }
+
+  /** Copy of the document with `edit(categories)` applied to its stamp categories, stamps repaired. */
+  function editCategories(doc, edit) {
+    const out = clone(doc);
+    if (!isObj(out.stampCategories)) out.stampCategories = clone(EMPTY_CATEGORIES);
+    edit(out.stampCategories);
+    return repairStamps(doc, out);
+  }
+
+  /** The group or group-less type a tier hangs on. `owner` is { group: id } or { type: id }; a type inside a group has
+      no tier of its own (it picks from its group's), so it gives null, as does an id the categories don't have. */
+  function tierOwnerIn(c, owner) {
+    if (!owner) return null;
+    if (owner.group != null) return findIn(c.groups, owner.group);
+    const t = findIn(c.types, owner.type);
+    return t && !findIn(c.groups, t.group) ? t : null;
+  }
+
+  /** New group with no types and no tier, added last. An id already used by a group changes nothing. */
+  function addStampGroup(doc, id, label) {
+    return editCategories(doc, (c) => {
+      if (isId(id) && !findIn(c.groups, id)) c.groups.push({ id, label: String(label) });
+    });
+  }
+
+  /** New type, added last: `fields` gives label, emoji, color, and optionally anchor, anchorLocked and group (an id the
+      categories don't have is left out). A type the designer adds is `manual` (only a placeholder) until UE knows it.
+      An id already used by a type changes nothing. */
+  function addStampType(doc, id, fields) {
+    return editCategories(doc, (c) => {
+      if (!isId(id) || findIn(c.types, id)) return;
+      const f = fields || {};
+      const t = { id, label: String(f.label ?? id), generate: "manual", color: String(f.color ?? "#888888"), emoji: String(f.emoji ?? "") };
+      if (findIn(c.groups, f.group)) t.group = f.group;
+      if (isStampAnchor(f.anchor)) t.anchor = f.anchor;
+      if (f.anchorLocked) t.anchorLocked = true;
+      c.types.push(t);
+    });
+  }
+
+  /** Fields of a group / type the panel edits. id, group (moveStampType), tier (the tier edits) and generate (a UE-side
+      fact) are not among them. */
+  const GROUP_FIELDS = ["label"];
+  const TYPE_FIELDS = ["label", "emoji", "color", "anchor", "anchorLocked"];
+  function patchFields(target, patch, fields) {
+    for (const k of fields) {
+      if (!patch || !(k in patch)) continue;
+      const v = patch[k];
+      if (k === "anchor") {
+        if (isStampAnchor(v)) target.anchor = v;
+      } else if (k === "anchorLocked") {
+        if (v) target.anchorLocked = true;
+        else delete target.anchorLocked;
+      } else target[k] = String(v);
+    }
+  }
+
+  /** Group with `patch` ({ label }) applied. */
+  function updateStampGroup(doc, id, patch) {
+    return editCategories(doc, (c) => {
+      const g = findIn(c.groups, id);
+      if (g) patchFields(g, patch, GROUP_FIELDS);
+    });
+  }
+
+  /** Type with `patch` ({ label, emoji, color, anchor, anchorLocked }, any of them) applied. Placed stamps keep their
+      emoji and colour; a type that locks its anchor sets its stamps' anchor. */
+  function updateStampType(doc, id, patch) {
+    return editCategories(doc, (c) => {
+      const t = findIn(c.types, id);
+      if (t) patchFields(t, patch, TYPE_FIELDS);
+    });
+  }
+
+  /** Type moved into group `groupId` ("" or null: out of any group), placed last among the group's types. Its stamps
+      lose a tier value the tier they now pick from doesn't have ("未选<tier>"). A type moving into a group drops its own
+      tier: inside a group it picks from the group's. The type's own group, or a group id the categories don't have,
+      changes nothing. */
+  function moveStampType(doc, id, groupId) {
+    return editCategories(doc, (c) => {
+      const t = findIn(c.types, id);
+      if (!t || (groupId && !findIn(c.groups, groupId)) || (findIn(c.groups, t.group)?.id ?? "") === (groupId || "")) return;
+      if (groupId) {
+        t.group = groupId;
+        delete t.tier;
+      } else delete t.group;
+      c.types.splice(c.types.indexOf(t), 1);
+      c.types.push(t);
+    });
+  }
+
+  /** Type deleted. Its stamps keep its group (未选小类) when it had one, else become 未分类 (repairStamps). */
+  function removeStampType(doc, id) {
+    return editCategories(doc, (c) => {
+      c.types = c.types.filter((t) => t.id !== id);
+    });
+  }
+
+  /** Group deleted with every type inside it. Their stamps, and the group-only ones, become 未分类. */
+  function removeStampGroup(doc, id) {
+    return editCategories(doc, (c) => {
+      if (!findIn(c.groups, id)) return;
+      c.groups = c.groups.filter((g) => g.id !== id);
+      c.types = c.types.filter((t) => t.group !== id);
+    });
+  }
+
+  /** Tier of `owner` ({ group } or { type } without a group) named `label`; created with no values when it has none.
+      Defining a tier makes the owner's stamps 未选完 until they pick a value. */
+  function setStampTier(doc, owner, label) {
+    return editCategories(doc, (c) => {
+      const o = tierOwnerIn(c, owner);
+      if (!o) return;
+      if (o.tier) o.tier.label = String(label);
+      else o.tier = { label: String(label), values: [] };
+    });
+  }
+
+  /** Tier of `owner` deleted; its stamps lose their tier value. */
+  function removeStampTier(doc, owner) {
+    return editCategories(doc, (c) => {
+      const o = tierOwnerIn(c, owner);
+      if (o) delete o.tier;
+    });
+  }
+
+  /** New value, last in `owner`'s tier. An id the tier already has changes nothing. */
+  function addTierValue(doc, owner, id, label) {
+    return editCategories(doc, (c) => {
+      const o = tierOwnerIn(c, owner);
+      if (o && o.tier && isId(id) && !findIn(o.tier.values, id)) o.tier.values.push({ id, label: String(label) });
+    });
+  }
+
+  /** Tier value renamed. */
+  function renameTierValue(doc, owner, id, label) {
+    return editCategories(doc, (c) => {
+      const o = tierOwnerIn(c, owner);
+      const v = o && o.tier && findIn(o.tier.values, id);
+      if (v) v.label = String(label);
+    });
+  }
+
+  /** Tier value deleted; the stamps that had it become "未选<tier>". */
+  function removeTierValue(doc, owner, id) {
+    return editCategories(doc, (c) => {
+      const o = tierOwnerIn(c, owner);
+      if (o && o.tier) o.tier.values = o.tier.values.filter((v) => v.id !== id);
+    });
+  }
+
+  /** How many stamps a delete would change, for "N 个元素在用". `ref`:
+      - { group }: stamps of the group (of its types, or only the group picked);
+      - { type }: stamps of the type;
+      - { group | type, tier: true }: stamps with a value of that owner's tier;
+      - { group | type, value }: stamps with that value of the owner's tier.
+      Counts stamps (a stamp's placed copies count once). */
+  function countStampsUsing(doc, ref) {
+    const v = vocabOf(doc);
+    const c = v.stamp;
+    const owner = ref.value != null || ref.tier ? tierOwnerIn(c, ref) : null;
+    const uses = (st) => {
+      if (ref.value != null || ref.tier) {
+        const val = owner && owner.tier && tierOf(st, "stamp", v) === owner.tier ? tierValueOf(st, "stamp", v) : null;
+        return !!val && (ref.tier || val.id === ref.value);
+      }
+      if (ref.type != null) return elementTypeOf(st, "stamp", v)?.id === ref.type;
+      return typeGroupOf(st, "stamp", v)?.id === ref.group;
+    };
+    return (doc.stamps || []).filter(uses).length;
+  }
+
   return {
+    newCategoryId, addStampGroup, addStampType, updateStampGroup, updateStampType, moveStampType, removeStampType,
+    removeStampGroup, setStampTier, removeStampTier, addTierValue, renameTierValue, removeTierValue, countStampsUsing,
     roomCode, parseRoomNumber, findUeFieldErrors, buildExportDoc, findRegion,
     vocabOf, fillStampCategories, migrateTypeData,
     typesForLayer, elementTypeOf, migrateTypeIds, defaultElementName, chooseType, manualMarkOf,

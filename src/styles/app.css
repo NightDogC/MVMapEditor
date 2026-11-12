@@ -757,6 +757,116 @@ textarea {
   color: var(--tx-dim);
   margin: 0 0 9px;
 }
+/* ── Stamp category panel (ui/categories.ts) ──────────────────── */
+.modal.modal-wide {
+  width: min(900px, 94vw);
+}
+.cat-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cat-actions {
+  margin: 4px 0 10px;
+  max-width: 240px;
+}
+.cat-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cat-head,
+.cat-type,
+.cat-tier {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cat-loose {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed var(--line);
+}
+.cat-loose:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.cat-tier {
+  padding-left: 30px;
+}
+.cat-k {
+  font-size: 11px;
+  color: var(--tx-mute);
+}
+#cat-panel input[type="text"],
+#cat-panel select {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 3px 6px;
+  color: var(--tx);
+  outline: none;
+}
+#cat-panel input[type="text"]:focus,
+#cat-panel select:focus {
+  border-color: var(--acc-2);
+}
+#cat-panel input[type="color"] {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+}
+#cat-panel .cat-emoji {
+  width: 30px;
+  text-align: center;
+  padding: 3px 0;
+}
+#cat-panel .cat-name {
+  width: 130px;
+}
+#cat-panel .cat-tiername {
+  width: 80px;
+}
+.cat-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+#cat-panel .cat-val input {
+  width: 64px;
+}
+.btn.cat-small {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+}
+.cat-lock {
+  padding: 0;
+}
+.cat-gen {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--tx-mute);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.cat-gen.manual {
+  color: #e7a35b;
+}
+.cat-used {
+  min-width: 56px;
+}
+
 .modal .close-row {
   display: flex;
   justify-content: flex-end;

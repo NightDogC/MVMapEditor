@@ -49,7 +49,27 @@ export interface Typed {
   tier?: string | null;
   name: string;
 }
+/** What a tier hangs on: a group, or a type without a group. */
+export type TierOwner = { group: string; type?: undefined } | { type: string; group?: undefined };
+/** What countStampsUsing counts: stamps of a group / type, or with a value of a tier (any value, or one). */
+export type StampUsageRef = TierOwner | (TierOwner & { tier: true }) | (TierOwner & { value: string });
+/** Fields of a type the category panel edits. */
+export type StampTypeFields = Partial<Pick<StampType, "label" | "emoji" | "color" | "anchor" | "anchorLocked">>;
 export interface UEApi {
+  newCategoryId(doc: MapDoc, prefix: string): string;
+  addStampGroup<T extends MapDoc>(doc: T, id: string, label: string): T;
+  addStampType<T extends MapDoc>(doc: T, id: string, fields: StampTypeFields & { group?: string }): T;
+  updateStampGroup<T extends MapDoc>(doc: T, id: string, patch: { label?: string }): T;
+  updateStampType<T extends MapDoc>(doc: T, id: string, patch: StampTypeFields): T;
+  moveStampType<T extends MapDoc>(doc: T, id: string, groupId: string | null): T;
+  removeStampType<T extends MapDoc>(doc: T, id: string): T;
+  removeStampGroup<T extends MapDoc>(doc: T, id: string): T;
+  setStampTier<T extends MapDoc>(doc: T, owner: TierOwner, label: string): T;
+  removeStampTier<T extends MapDoc>(doc: T, owner: TierOwner): T;
+  addTierValue<T extends MapDoc>(doc: T, owner: TierOwner, id: string, label: string): T;
+  renameTierValue<T extends MapDoc>(doc: T, owner: TierOwner, id: string, label: string): T;
+  removeTierValue<T extends MapDoc>(doc: T, owner: TierOwner, id: string): T;
+  countStampsUsing(doc: MapDoc, ref: StampUsageRef): number;
   roomCode(letter: string | null | undefined, number: number | null | undefined): string;
   parseRoomNumber(text: string): { value: number | null; error: string | null };
   findUeFieldErrors(doc: MapDoc, regions: Region[]): string[];

@@ -1,8 +1,9 @@
-/* Modals: help (with the shortcut editor) and the saved-map library. */
+/* Modals: help (with the shortcut editor) and the saved-map library. The stamp category panel is in categories.ts. */
 import { S } from "../state/store.ts";
 import { Store } from "../state/persist.ts";
 import { newDoc } from "../model/doc.ts";
 import { loadDoc } from "../io/files.ts";
+import { CATEGORY_PANEL_SHELL, renderCategoryPanel } from "./categories.ts";
 import {
   TOOL_LIST, DEFAULT_TOOL_KEYS, applyToolKeys, saveToolKeys, readKeymap, keymapProblem, keyProblem, keyLabel, toolName, normKey,
   currentToolKeys, toolForKey,
@@ -10,7 +11,9 @@ import {
 import { $, esc, saveBlob } from "../util.ts";
 
 export const modalOpen = (): boolean => !$("#modal").hidden;
-export function openModal(html: string): void {
+/** `cls`: an extra class for the box, e.g. "modal-wide". */
+export function openModal(html: string, cls?: string): void {
+  $("#modal-box").className = "modal" + (cls ? " " + cls : "");
   $("#modal-box").innerHTML = html;
   $("#modal").hidden = false;
 }
@@ -63,6 +66,9 @@ const HELP = `
      like; pick the emoji from the inspector's palette or type one — the field holds exactly one emoji. Click with the <b>Stamp</b> tool
      to place the active one (it snaps like everything else), <b>Shift</b>-click to start a new stamp, <b>Ctrl</b>-click
      to remove one. Click a placed stamp to select it and drag to move just that copy.</p>
+  <p>A stamp's <b>Type</b> comes from this map's stamp categories: groups (敌人 ▸), types and tiers (强弱, 大小).
+     <b>Stamp 分类…</b> in the top bar edits them. Renaming never changes a stamp; deleting asks first, and the stamps
+     using it stay, shown red until they are picked again. Emoji and colour changes apply to new stamps only.</p>
   <h3>Notes</h3>
   <p>A <b>note</b> is a standalone annotation the size of one cell, drawn above everything else. Click with the
      <b>Note</b> tool to add one, then write its details in the Inspector. The <b>+</b>
@@ -222,6 +228,10 @@ export function bindModals(): void {
   });
   $("#btn-help").onclick = openHelp;
   $("#btn-maps").onclick = () => void openLibrary();
+  $("#btn-categories").onclick = () => {
+    openModal(CATEGORY_PANEL_SHELL, "modal-wide");
+    renderCategoryPanel();
+  };
 
   // capture phase, so a key being bound never reaches the editor's own shortcuts
   window.addEventListener(
