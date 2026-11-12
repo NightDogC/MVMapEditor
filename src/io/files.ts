@@ -7,16 +7,18 @@ import { docBBox } from "../state/layers.ts";
 import { makeView, fitWorld } from "../render/view.ts";
 import { drawWorld } from "../render/world.ts";
 import { renderUI } from "../ui/panels.ts";
-import { UE, REGIONS, ELEMENT_TYPES } from "../ue.ts";
+import { UE, REGIONS, FIXED_TYPES } from "../ue.ts";
 import { $, uid, clamp, saveBlob, slug } from "../util.ts";
 
 const ueErrorText = (errs: string[]) => "Region / room number problems (the UE importer will reject these rooms):\n\n• " + errs.join("\n• ");
+const categoryProblemText = (lines: string[]) =>
+  "Stamp categories repaired on load (the file was edited by hand?). Stamps that used a dropped entry show red:\n\n• " + lines.join("\n• ");
 
 export function exportJSON(): void {
   const errs = UE.findUeFieldErrors(S.doc, REGIONS);
   if (errs.length && !confirm(ueErrorText(errs) + "\n\nExport anyway?")) return;
   S.doc.updated = Date.now();
-  const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS, ELEMENT_TYPES), null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS, FIXED_TYPES), null, 2)], { type: "application/json" });
   saveBlob(blob, slug(S.doc.name) + ".mvmap.json");
 }
 
@@ -40,7 +42,9 @@ export function exportPNG(): void {
   c.toBlob((blob) => blob && saveBlob(blob, slug(S.doc.name) + ".png"), "image/png");
 }
 
-export function loadDoc(d: unknown): void {
+/** Opens `d` as the current map. `categoryProblems`: what loading cleaned out of a file's hand-edited stamp categories
+    (UE.stampCategoryProblems of the file as read), shown together with the region / room number problems. */
+export function loadDoc(d: unknown, categoryProblems: string[] = []): void {
   S.doc = migrateDoc(d);
   S.sel = null;
   S.activeRoomId = null;
@@ -54,8 +58,12 @@ export function loadDoc(d: unknown): void {
   commit();
   fitWorld();
   const errs = UE.findUeFieldErrors(S.doc, REGIONS);
+  const parts = [
+    errs.length ? ueErrorText(errs) : "",
+    categoryProblems.length ? categoryProblemText(categoryProblems) : "",
+  ].filter(Boolean);
   // after the map has had a chance to draw, so the user can see what the message is about
-  if (errs.length) setTimeout(() => alert(ueErrorText(errs)), 50);
+  if (parts.length) setTimeout(() => alert(parts.join("\n\n")), 50);
 }
 
 export function bindFiles(): void {
@@ -69,12 +77,14 @@ export function bindFiles(): void {
     const rd = new FileReader();
     rd.onload = () => {
       try {
-        const d: MapDoc = migrateDoc(JSON.parse(String(rd.result)));
+        const raw: unknown = JSON.parse(String(rd.result));
+        const categoryProblems = UE.stampCategoryProblems(raw);
+        const d: MapDoc = migrateDoc(raw);
         d.id = uid("map"); // import as a new map, never clobber
         // the map you had open becomes the newest undo step, on top of its own history
         const before = snapshot();
         const history = undoStack.slice();
-        loadDoc(d);
+        loadDoc(d, categoryProblems);
         undoStack.push(...history, before);
         while (undoStack.length > 120) undoStack.shift();
         renderUI();

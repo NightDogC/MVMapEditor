@@ -67,23 +67,48 @@ function cleanSegs(v: unknown): Seg[] {
   const ss = (Array.isArray(v) ? v : []).map(asObj).filter((s) => fin(s.x1, s.y1, s.x2, s.y2));
   return normalizeSegs(ss.map((s) => segToT(s as Seg))).map(segFromT);
 }
-function cleanPoints(v: unknown): Pt[] {
+/** A stamp point's id as stored: kept when it is a non-empty string not used by an earlier point of the document. */
+const usablePointId = (id: unknown, used: Set<string>): id is string => typeof id === "string" && id !== "" && !used.has(id);
+
+/** Stamp points on the lattice, one per position. Points with no usable id (files from before point ids, or a
+    duplicated id) get a new one; `usedIds` holds the ids of the whole document, so ids stay unique across stamps. */
+function cleanPoints(v: unknown, usedIds: Set<string>): Pt[] {
   const seen = new Set<string>();
   const out: Pt[] = [];
   for (const p of (Array.isArray(v) ? v : []).map(asObj)) {
     if (!fin(p.x, p.y)) continue;
-    const q = { x: quantize(p.x), y: quantize(p.y) };
-    const k = q.x + "," + q.y;
+    const x = quantize(p.x), y = quantize(p.y);
+    const k = x + "," + y;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push(q);
+    const id = usablePointId(p.id, usedIds) ? p.id : newPointId();
+    usedIds.add(id);
+    out.push({ id, x, y });
   }
   return out;
 }
 
+/** Id for a newly placed stamp point; same format as element ids. */
+export const newPointId = (): string => uid("pt");
+
+/** Whether a stored document has a stamp point that migrate() will give a new id (none, or not a usable one). Those
+    ids are random, so a document loaded without being saved afterwards would get different ones on every load. */
+export function hasStampPointWithoutId(input: unknown): boolean {
+  const used = new Set<string>();
+  for (const s of (Array.isArray(asObj(input).stamps) ? asObj(input).stamps : []).map(asObj)) {
+    if (!Array.isArray(s.points) && Array.isArray(s.cells) && s.cells.length) return true; // 1.x stamp cells
+    for (const p of (Array.isArray(s.points) ? s.points : []).map(asObj)) {
+      if (!usablePointId(p.id, used)) return true;
+      used.add(p.id);
+    }
+  }
+  return false;
+}
+
 /** Normalise anything loaded from disk/db so missing fields can't crash the editor, converting 1.x grid-cell
-    structures / edge structures / stamps to version-2 geometry on the way. `migrateTypes` is UE.migrateTypeIds
-    bound to the vocabulary (left out by tests that don't load it). */
+    structures / edge structures / stamps to version-2 geometry on the way, and giving stamp points without an id one. `migrateTypes` is
+    UE.migrateTypeData bound to the vocabulary: stamp categories, old type ids, stamp anchors (left out by tests that
+    don't load it). */
 export function migrate(input: unknown, migrateTypes?: (d: MapDoc) => MapDoc): MapDoc {
   const base = newDoc();
   const d = Object.assign({}, base, asObj(input)) as MapDoc & Record<string, any>;
@@ -113,10 +138,11 @@ export function migrate(input: unknown, migrateTypes?: (d: MapDoc) => MapDoc): M
     if (typeof s.notes !== "string") s.notes = "";
   });
   d.stamps = Array.isArray(d.stamps) ? d.stamps : [];
+  const pointIds = new Set<string>();
   d.stamps.forEach((s: Stamp & { cells?: string[] }) => {
     s.points = Array.isArray(s.points)
-      ? cleanPoints(s.points)
-      : cleanPoints((Array.isArray(s.cells) ? s.cells : []).map(unck).map(([x, y]) => ({ x, y })));
+      ? cleanPoints(s.points, pointIds)
+      : cleanPoints((Array.isArray(s.cells) ? s.cells : []).map(unck).map(([x, y]) => ({ x, y })), pointIds);
     delete s.cells;
     if (typeof s.notes !== "string") s.notes = "";
     s.emoji = pickEmoji(String(s.emoji || "")) || STAMP_EMOJI[0];

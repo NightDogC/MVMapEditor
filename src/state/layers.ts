@@ -2,7 +2,7 @@
    Geometry operations run in ticks (geom/lattice.ts); documents keep cell units. */
 import type { Structure, EdgeStruct, Stamp, Note, Room, Pt } from "../model/types.ts";
 import { STRUCT_COLORS, STAMP_EMOJI, NOTE_COLORS } from "../model/constants.ts";
-import { structT, setStructT, edgeT, setEdgeT } from "../model/doc.ts";
+import { structT, setStructT, edgeT, setEdgeT, newPointId } from "../model/doc.ts";
 import { TICKS, toT, fromT } from "../geom/lattice.ts";
 import { normalize, union, subtract, intersect, isEmpty, components, containsPoint, translate, bbox, type TRect } from "../geom/region.ts";
 import { normalizeSegs, subtractCollinear, eraseBox, segComponents, splitByCells, translateSegs, distToSeg2, type TSeg } from "../geom/segs.ts";
@@ -174,19 +174,31 @@ export function createStamp(): Stamp {
     notes: "",
     points: [],
     typeId: null,
+    anchor: UE.defaultStampAnchor(null),
   };
   S.doc.stamps.push(s);
   S.activeStampId = s.id;
   return s;
 }
 const samePt = (a: Pt, b: Pt) => a.x === b.x && a.y === b.y;
-/** Put a copy of `st` at (x, y) (cell units, top-left); a stamp already at exactly that spot gives way. */
-export function placeStamp(st: Stamp, x: number, y: number): boolean {
-  const p = { x, y };
+/** Put a copy of `st` at (x, y) (cell units, top-left); a stamp already at exactly that spot gives way (that point is
+    deleted, its id with it). The new point gets a new id, or `id` when an existing point is being put back (a room move). */
+export function placeStamp(st: Stamp, x: number, y: number, id: string = newPointId()): boolean {
+  const p = { id, x, y };
   if (st.points.some((q) => samePt(q, p))) return false;
   for (const o of S.doc.stamps) if (o.points.some((q) => samePt(q, p))) o.points = o.points.filter((q) => !samePt(q, p));
   st.points = [...st.points, p];
   return true;
+}
+/** Whether any stamp point (of any stamp) sits exactly at (x, y). */
+export const stampSpotTaken = (x: number, y: number): boolean => S.doc.stamps.some((s) => s.points.some((o) => o.x === x && o.y === y));
+/** Drag point `p` of `st` to (x, y), keeping its id. Never drops it exactly onto another point (its own old spot
+    included): returns the moved point, or null when the spot is taken and nothing changed. */
+export function moveStampPoint(st: Stamp, p: Pt, x: number, y: number): Pt | null {
+  if (stampSpotTaken(x, y)) return null;
+  const np = { id: p.id, x, y };
+  st.points = st.points.map((o) => (o === p ? np : o));
+  return np;
 }
 export function removeStampPoint(st: Stamp, p: Pt): void {
   st.points = st.points.filter((q) => !samePt(q, p));
@@ -338,7 +350,7 @@ export function carryOffGrid(room: Room, owned: Set<string>, ownsEdge: (e: { o: 
     const DX = dx * TICKS, DY = dy * TICKS;
     for (const [st, m] of structs) paintStructArea(st, translate(m, DX, DY));
     for (const [es, segs] of edges) addEdgeSegs(es, translateSegs(segs, DX, DY));
-    for (const [st, p] of stamps) placeStamp(st, p.x + dx, p.y + dy);
+    for (const [st, p] of stamps) placeStamp(st, p.x + dx, p.y + dy, p.id);
     // notes ride along; one already sitting exactly at the destination gives way
     const moving = new Set(notes);
     const landing = new Set(notes.map((n) => ck(n.x + dx, n.y + dy)));

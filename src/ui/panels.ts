@@ -7,8 +7,9 @@ import { sT, eT } from "../state/layers.ts";
 import { area } from "../geom/region.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS } from "../geom/lattice.ts";
-import { UE, ELEMENT_TYPES } from "../ue.ts";
+import { UE, vocabOf, type Typed } from "../ue.ts";
 import { renderInspector } from "./inspector.ts";
+import { renderCategoryPanel } from "./categories.ts";
 import { $, esc } from "../util.ts";
 
 /** A count / size for list rows: whole numbers stay whole, fractions get up to two decimals. */
@@ -28,6 +29,7 @@ export function renderLists(): void {
 export function renderUI(): void {
   renderLists();
   renderInspector();
+  renderCategoryPanel();
   $<HTMLButtonElement>("#btn-undo").disabled = !undoStack.length;
   $<HTMLButtonElement>("#btn-redo").disabled = !redoStack.length;
   const nm = $<HTMLInputElement>("#map-name");
@@ -127,10 +129,13 @@ function renderKeys(): void {
     .join("");
 }
 
-/** List row extras for an element with no usable type: a class that turns its name red, and a "未分类" tag. */
-const untyped = (it: { typeId?: string | null; name: string }, layer: ElementLayer) => !UE.elementTypeOf(it, layer, ELEMENT_TYPES);
-const untypedTag = (it: { typeId?: string | null; name: string }, layer: ElementLayer) =>
-  untyped(it, layer) ? `<span class="untyped-tag">未分类</span>` : "";
+/** List row extras for an element the UE importer can't generate yet: a class that turns its name red, and a tag
+    saying why ("未分类", "钱盒（未选大小）"). */
+const notComplete = (it: Typed, layer: ElementLayer) => UE.elementStatusOf(it, layer, vocabOf(S.doc)) !== "complete";
+const statusTag = (it: Typed, layer: ElementLayer) => {
+  const label = UE.statusLabelOf(it, layer, vocabOf(S.doc));
+  return label ? `<span class="status-tag">${esc(label)}</span>` : "";
+};
 
 function renderStructs(): void {
   const host = $("#struct-list");
@@ -142,10 +147,10 @@ function renderStructs(): void {
   const selId = S.sel && S.sel.type === "struct" ? S.sel.id : null;
   host.innerHTML = S.doc.structures
     .map(
-      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "structure") ? "untyped" : ""}" data-struct="${s.id}">
+      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${notComplete(s, "structure") ? "not-complete" : ""}" data-struct="${s.id}">
           <span class="swatch" style="background:${structColor(s)}"></span>
           <span class="nm">${esc(s.name)}${s.id === S.activeStructId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
-          ${untypedTag(s, "structure")}
+          ${statusTag(s, "structure")}
           <span class="sub" title="Area in cells">${num(area(sT(s)) / (TICKS * TICKS))}</span>
         </div>`
     )
@@ -162,10 +167,10 @@ function renderEdgeStructs(): void {
   const selId = S.sel && S.sel.type === "edge" ? S.sel.id : null;
   host.innerHTML = S.doc.edgeStructs
     .map(
-      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "edge") ? "untyped" : ""}" data-edge="${s.id}">
+      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${notComplete(s, "edge") ? "not-complete" : ""}" data-edge="${s.id}">
           <span class="swatch" style="background:${structColor(s)};height:4px;border-radius:2px"></span>
           <span class="nm">${esc(s.name)}${s.id === S.activeEdgeId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
-          ${untypedTag(s, "edge")}
+          ${statusTag(s, "edge")}
           <span class="sub" title="Total length in cells">${num(eT(s).reduce((a, g) => a + segLength(g), 0) / TICKS)}</span>
         </div>`
     )
@@ -182,10 +187,10 @@ function renderStamps(): void {
   const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
   host.innerHTML = S.doc.stamps
     .map(
-      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "stamp") ? "untyped" : ""}" data-stamp="${s.id}">
+      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${notComplete(s, "stamp") ? "not-complete" : ""}" data-stamp="${s.id}">
           <span class="emo">${esc(s.emoji)}</span>
           <span class="nm">${esc(s.name)}${s.id === S.activeStampId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
-          ${untypedTag(s, "stamp")}
+          ${statusTag(s, "stamp")}
           <span class="sub" title="Placed copies">${s.points.length}</span>
         </div>`
     )

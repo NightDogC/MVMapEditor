@@ -1,9 +1,9 @@
 """
-MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里 manual 类型的 emoji 渲染成 png，给 UE 导入工具当占位图标
+MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里会生成占位的类型的 emoji 渲染成 png，给 UE 导入工具当占位图标
 
 做法：
     用本机的 Chrome / Edge 无头模式打开一个临时页面。页面加载 MVMapEditor 的词表 mvmap-types.js，
-    再用和编辑器画 stamp 完全相同的画法（canvas fillText、同一组 emoji 字体）逐个画出 manual 类型的 emoji，
+    再用和编辑器画 stamp 完全相同的画法（canvas fillText、同一组 emoji 字体）逐个画出这些类型的 emoji，
     导出为带透明通道的 png。浏览器和字体都和编辑器里看到的是同一套，所以图标一致。
 
     字体组是从 MVMapEditor 的源码（src/ 下的 .ts 文件）里读出来的。编辑器改了 stamp 的画法、找不到这组字体时，
@@ -14,12 +14,17 @@ MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里 manual 类型的
     找不到它时只跳过这一步并给出警告。
 
 输出：
-    <输出目录>/T_Emoji_MVMap_<typeId>.png，例如 T_Emoji_MVMap_SavePoint.png。导出词表里所有 generate 为 manual 的类型：
-    全部 stamp，以及 manual 的 structure / edge 类型（如单向门、隐藏区域）。后两者在编辑器地图上不画 emoji，
-    用的是词表里给它们配的 emoji，画法和 stamp 相同。
+    <输出目录>/T_Emoji_MVMap_<typeId>.png，例如 T_Emoji_MVMap_SavePoint.png。导出的类型：
+    - 全部 stamp，manual 和 auto 都导出：auto 的 stamp（存档点、钱盒、敌人等）生成游戏物体时也保留一个占位，挂在生成物下面。
+      stamp 的类型取自 --map 给的地图文件（.mvmap.json，编辑器 Export 出来的）里的 stamp 分类，策划在编辑器里新建的类型
+      也会导出；没给 --map、或者文件里没有 stamp 分类（五期之前的旧文件）时，用 mvmap-types.js 的默认分类
+      （defaultStampCategories），和编辑器打开这种文件时补上的一样；
+    - manual 的 structure / edge 类型（如单向门、隐藏区域）。它们在编辑器地图上不画 emoji，用的是词表里给它们配的 emoji，
+      画法和 stamp 相同。auto 的 structure / edge 类型（地形、可下落平台等）不生成占位，不导出。
 
 用法：
     python export_mvmap_stamp_icons.py                      （默认输出到本目录下的 StampIcons/，由 P4 管理、git 不跟踪）
+    python export_mvmap_stamp_icons.py --map Export/nuosoul.mvmap.json   （stamp 类型取自这个地图文件）
     python export_mvmap_stamp_icons.py --out D:/somewhere   （指定输出目录）
     python export_mvmap_stamp_icons.py --size 128           （贴图边长，默认 256，必须是 2 的次幂）
 
@@ -80,7 +85,8 @@ PAGE_TEMPLATE = """<!doctype html>
   try {{
     await document.fonts.load(font);
   }} catch (e) {{}}
-  for (const t of MVMapTypes.types.filter((x) => x.generate === "manual")) {{
+  const stampTypes = {stamp_types} || MVMapTypes.defaultStampCategories.types;
+  for (const t of [...stampTypes, ...MVMapTypes.types.filter((x) => x.generate === "manual")]) {{
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext("2d");
@@ -118,7 +124,36 @@ def read_editor_font_stack(src_dir: Path) -> str:
     return f"{stamp_fonts[0]}, {fontf[0]}"
 
 
-def render(browser: Path, size: int, font_stack: str) -> dict:
+# 图标文件名里要用 typeId：编辑器生成的 id 只有字母、数字和下划线，手改的文件可能不是。
+TYPE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def read_map_stamp_types(map_path: Path) -> list | None:
+    """地图文件里的 stamp 类型（stampCategories.types），只留 emoji 和 id 能用的；文件里没有 stamp 分类时返回 None。"""
+    try:
+        doc = json.loads(map_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        sys.exit(f"读不了地图文件 {map_path}：{e}")
+    categories = doc.get("stampCategories") if isinstance(doc, dict) else None
+    if not isinstance(categories, dict) or not isinstance(categories.get("types"), list):
+        return None
+    types, seen = [], set()
+    for t in categories["types"]:
+        if not isinstance(t, dict):
+            continue
+        type_id, emoji = t.get("id"), t.get("emoji")
+        if not isinstance(type_id, str) or not TYPE_ID_PATTERN.match(type_id) or type_id in seen:
+            print(f"警告：跳过 typeId 不能用作文件名或重复的类型 {type_id!r}。", file=sys.stderr)
+            continue
+        if not isinstance(emoji, str) or not emoji:
+            print(f"警告：跳过没有 emoji 的类型 {type_id}。", file=sys.stderr)
+            continue
+        seen.add(type_id)
+        types.append({"id": type_id, "emoji": emoji, "label": str(t.get("label", type_id))})
+    return types
+
+
+def render(browser: Path, size: int, font_stack: str, stamp_types: list | None) -> dict:
     types_js = MVMAP_DIR / "mvmap-types.js"
     if not types_js.exists():
         sys.exit(f"找不到词表 {types_js}。")
@@ -130,6 +165,8 @@ def render(browser: Path, size: int, font_stack: str) -> dict:
         font_stack=font_stack,
         offset_ratio=EDITOR_OFFSET_RATIO,
         font_ratio=EDITOR_FONT_RATIO,
+        # 嵌进 <script>：ensure_ascii 让中文和 emoji 都变成 \u 转义，再挡掉 "</script>"
+        stamp_types=json.dumps(stamp_types, ensure_ascii=True).replace("</", "<\\/"),
     )
     with tempfile.TemporaryDirectory() as tmp:
         page_path = Path(tmp) / "render.html"
@@ -167,9 +204,10 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-    parser = argparse.ArgumentParser(description="把 MVMapEditor 词表里 manual 类型的 emoji 渲染成 UE 占位图标 png")
+    parser = argparse.ArgumentParser(description="把 MVMapEditor 词表里会生成占位的类型（全部 stamp、manual 的 structure / edge）的 emoji 渲染成 UE 占位图标 png")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"输出目录，默认 {DEFAULT_OUT}")
     parser.add_argument("--size", type=int, default=256, help="贴图边长（像素），必须是 2 的次幂，默认 256")
+    parser.add_argument("--map", type=Path, help="地图文件（.mvmap.json），stamp 类型取自它的 stamp 分类；不给时用默认分类")
     args = parser.parse_args()
 
     if args.size < 16 or args.size & (args.size - 1):
@@ -179,10 +217,17 @@ def main() -> int:
     font_stack = read_editor_font_stack(MVMAP_DIR / "src")
     print(f"浏览器：{browser}")
     print(f"字体：{font_stack}")
+    stamp_types = read_map_stamp_types(args.map) if args.map else None
+    if not args.map:
+        print("stamp 类型：默认分类（mvmap-types.js）")
+    elif stamp_types is None:
+        print(f"stamp 类型：{args.map} 里没有 stamp 分类，用默认分类（mvmap-types.js）")
+    else:
+        print(f"stamp 类型：{args.map} 的 stamp 分类，{len(stamp_types)} 个")
 
-    rendered = render(browser, args.size, font_stack)
+    rendered = render(browser, args.size, font_stack, stamp_types)
     if not rendered:
-        sys.exit("词表里没有 manual 类型。")
+        sys.exit("词表里没有要导出图标的类型。")
 
     args.out.mkdir(parents=True, exist_ok=True)
     written = []

@@ -1,7 +1,7 @@
 import { clamp } from "../util.ts";
 import { CELL } from "../model/constants.ts";
 import { S } from "../state/store.ts";
-import { UE, ELEMENT_TYPES } from "../ue.ts";
+import { UE, vocabOf, type Typed } from "../ue.ts";
 import type { ElementLayer } from "../model/types.ts";
 
 // The stamp-icon export script (export_mvmap_stamp_icons.py) reads FONTF and the stamp font line in render/ from
@@ -43,14 +43,14 @@ export function hatchPattern(ctx: CanvasRenderingContext2D): CanvasPattern | nul
   return p;
 }
 
-/* Elements the UE importer won't generate (manual types, and 未分类 ones) get a dashed outline and a badge on each
-   piece; "Highlight hand-placed only" fades everything else. */
+/* Elements the UE importer won't generate (manual types, and 未分类 / 未选完 ones) get a dashed outline and a badge on
+   each piece; "Highlight hand-placed only" fades everything else. */
 export const MARK_STYLE = {
   manual: { color: "#ffb02e", glyph: "手", dash: [6, 4] },
   unclassified: { color: "#ff4d5e", glyph: "?", dash: [2, 3] },
 };
 export const MARK_FADE = 0.18;
-export const markOf = (it: { typeId?: string | null; name: string }, layer: ElementLayer) => UE.manualMarkOf(it, layer, ELEMENT_TYPES);
+export const markOf = (it: Typed, layer: ElementLayer) => UE.manualMarkOf(it, layer, vocabOf(S.doc));
 /** Draw alpha for an element: faded when highlighting hand-placed elements and this one is generated. */
-export const markAlpha = (it: { typeId?: string | null; name: string }, layer: ElementLayer): number =>
+export const markAlpha = (it: Typed, layer: ElementLayer): number =>
   S.highlightManual && !markOf(it, layer) ? MARK_FADE : 1;
