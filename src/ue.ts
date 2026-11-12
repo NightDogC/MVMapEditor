@@ -28,8 +28,9 @@ export interface OldStampId {
   type?: string;
   tier?: string;
 }
-/** mvmap-types.js */
-export interface Vocabulary {
+/** mvmap-types.js: the fixed types, the default stamp categories, regions and old stamp ids (not one document's types:
+    that is Vocab). */
+export interface TypesFile {
   regions: Region[];
   types: FixedType[];
   defaultStampCategories: StampCategories;
@@ -53,10 +54,18 @@ export interface Typed {
 export type TierOwner = { group: string; type?: undefined } | { type: string; group?: undefined };
 /** What countStampsUsing counts: stamps of a group / type, or with a value of a tier (any value, or one). */
 export type StampUsageRef = TierOwner | (TierOwner & { tier: true }) | (TierOwner & { value: string });
+/** A group, a type, or a tier value (with its tier's owner): what an id rename names. */
+export type CategoryIdRef = TierOwner | (TierOwner & { value: string });
+/** Why an id rename is refused (mvmap-ue.js categoryIdProblem). */
+export type CategoryIdProblem = "missing" | "locked" | "format" | "taken";
 /** Fields of a type the category panel edits. */
 export type StampTypeFields = Partial<Pick<StampType, "label" | "emoji" | "color" | "anchor" | "anchorLocked">>;
 export interface UEApi {
-  newCategoryId(doc: MapDoc, prefix: string): string;
+  usedCategoryIds(doc: MapDoc): Set<string>;
+  stampTierOwner(doc: MapDoc, owner: TierOwner): StampGroup | StampType | null;
+  isCategoryIdLocked(ref: CategoryIdRef, defaults: StampCategories): boolean;
+  categoryIdProblem(doc: MapDoc, ref: CategoryIdRef, id: string, defaults: StampCategories): CategoryIdProblem | null;
+  renameCategoryId<T extends MapDoc>(doc: T, ref: CategoryIdRef, id: string, defaults: StampCategories): T;
   addStampGroup<T extends MapDoc>(doc: T, id: string, label: string): T;
   addStampType<T extends MapDoc>(doc: T, id: string, fields: StampTypeFields & { group?: string }): T;
   updateStampGroup<T extends MapDoc>(doc: T, id: string, patch: { label?: string }): T;
@@ -77,7 +86,8 @@ export interface UEApi {
   findRegion(regions: Region[], name: string | null | undefined): Region | null;
   vocabOf(doc: MapDoc, types: FixedType[]): Vocab;
   fillStampCategories<T extends MapDoc>(doc: T, defaults: StampCategories): T;
-  migrateTypeData<T extends MapDoc>(doc: T, vocabulary: Vocabulary): T;
+  stampCategoryProblems(doc: unknown): string[];
+  migrateTypeData<T extends MapDoc>(doc: T, typesFile: TypesFile): T;
   typesForLayer(vocab: Vocab, layer: ElementLayer): ElementType[];
   elementTypeOf(el: Typed, layer: ElementLayer, vocab: Vocab): ElementType | null;
   migrateTypeIds<T extends MapDoc>(doc: T, types: FixedType[], oldStampIds?: OldStampId[]): T;
@@ -102,7 +112,7 @@ export interface UEApi {
 
 declare global {
   interface Window {
-    MVMapTypes?: Vocabulary;
+    MVMapTypes?: TypesFile;
     MVMapUE?: UEApi;
   }
 }
@@ -111,14 +121,21 @@ const missing = typeof window !== "undefined" && (!window.MVMapTypes || !window.
 if (missing) alert("mvmap-types.js / mvmap-ue.js not found — keep them in the same folder as index.html.");
 
 export const UE = (typeof window !== "undefined" && window.MVMapUE) as UEApi;
-export const VOCABULARY: Vocabulary = (typeof window !== "undefined" && window.MVMapTypes) || {
+export const TYPES_FILE: TypesFile = (typeof window !== "undefined" && window.MVMapTypes) || {
   regions: [],
   types: [],
   defaultStampCategories: { groups: [], types: [] },
   oldStampIds: [],
 };
-export const REGIONS: Region[] = VOCABULARY.regions;
-export const ELEMENT_TYPES: FixedType[] = VOCABULARY.types;
+export const REGIONS: Region[] = TYPES_FILE.regions;
+/** The structure / edge types (stamp types are per document, in its stampCategories). */
+export const FIXED_TYPES: FixedType[] = TYPES_FILE.types;
 
-/** The element types of `doc`: the fixed structure / edge types plus its stamp categories. */
-export const vocabOf = (doc: MapDoc): Vocab => UE.vocabOf(doc, ELEMENT_TYPES);
+/** The element types of `doc`: the fixed structure / edge types plus its stamp categories. Kept while the document's
+    categories object stays the same one, since rendering asks for it once per element: category edits, undo and loading
+    all replace that object (mvmap-ue.js edits return a new document), never change it in place. */
+let lastVocab: Vocab | null = null;
+export function vocabOf(doc: MapDoc): Vocab {
+  if (!lastVocab || !doc.stampCategories || lastVocab.stamp !== doc.stampCategories) lastVocab = UE.vocabOf(doc, FIXED_TYPES);
+  return lastVocab;
+}

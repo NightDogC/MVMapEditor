@@ -2,7 +2,7 @@ import type { MapDoc, Door, Pt } from "../model/types.ts";
 import { newDoc, migrate } from "../model/doc.ts";
 import { AREA_COLORS, PENCIL_COLORS, PENCIL_SIZE, ERASER_SIZE, STRUCT_COLORS } from "../model/constants.ts";
 import { DEFAULT_SNAP } from "../geom/lattice.ts";
-import { UE, VOCABULARY } from "../ue.ts";
+import { UE, TYPES_FILE } from "../ue.ts";
 import { ck } from "../util.ts";
 import { scheduleSave } from "./persist.ts";
 import { renderUI } from "../ui/panels.ts";
@@ -70,7 +70,7 @@ export const undoStack: string[] = [];
 export const redoStack: string[] = [];
 
 export const migrateDoc = (d: unknown): MapDoc =>
-  migrate(d, (x) => UE.migrateTypeData(x, VOCABULARY));
+  migrate(d, (x) => UE.migrateTypeData(x, TYPES_FILE));
 
 export function reindex(): void {
   idx.cell = new Map();

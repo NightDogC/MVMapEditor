@@ -1,6 +1,14 @@
 export const $ = <T extends HTMLElement = HTMLElement>(s: string): T => document.querySelector(s) as T;
 export const uid = (p: string): string => p + "_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
-export const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
+/** A fresh id for a stamp group, type or tier value: `prefix_` + six random base-36 characters, none of `used`
+    (mvmap-ue.js usedCategoryIds), so it is also safe as a UE typeId and an icon file name. */
+export function newCategoryId(used: ReadonlySet<string>, prefix: string): string {
+  for (;;) {
+    const id = `${prefix}_${Math.random().toString(36).slice(2).padEnd(6, "0").slice(0, 6)}`;
+    if (!used.has(id)) return id;
+  }
+}
+export const clamp =(v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
 export const ck = (x: number, y: number): string => x + "," + y;
 export const unck = (s: string): [number, number] => {
   const i = s.indexOf(",");

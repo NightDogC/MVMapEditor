@@ -55,6 +55,8 @@
      value's id in `tier`. Functions working on one element take a vocabulary { types, stamp } built by vocabOf. */
 
   const EMPTY_CATEGORIES = { groups: [], types: [] };
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const findIn = (list, id) => (id != null && list.find((x) => x.id === id)) || null;
 
   /** The vocabulary of a document: the fixed structure / edge types plus the document's stamp categories. */
   const vocabOf = (doc, types) => ({ types: types || [], stamp: (doc && doc.stampCategories) || EMPTY_CATEGORIES });
@@ -62,41 +64,98 @@
   const isObj = (v) => v != null && typeof v === "object" && !Array.isArray(v);
   const isId = (v) => typeof v === "string" && v !== "";
 
-  /** Entries of a list that are objects with a string id, first one of each id kept. */
-  function withIds(list) {
-    const seen = new Set();
-    return (Array.isArray(list) ? list : []).filter((x) => isObj(x) && isId(x.id) && !seen.has(x.id) && seen.add(x.id));
+  /* Cleaning hand-edited categories. Every cleaning step calls `report(line)` with what it dropped or filled in, so
+     loading a file can say so (stampCategoryProblems) instead of changing it silently. The editor itself never writes
+     anything these steps change. */
+
+  /** A list field that is there but isn't a list counts as empty, and is reported. */
+  function listOf(list, what, report) {
+    if (list != null && !Array.isArray(list)) report(`${what}: not a list, ignored`);
+    return Array.isArray(list) ? list : [];
   }
-  function cleanTier(tier) {
-    if (!isObj(tier)) return undefined;
-    const values = withIds(tier.values).map((v) => ({ ...v, label: typeof v.label === "string" ? v.label : v.id }));
+  /** Entries of a list that are objects with a string id, first one of each id kept. */
+  function withIds(list, what, report) {
+    const seen = new Set();
+    return list.filter((x, i) => {
+      if (!isObj(x) || !isId(x.id)) report(`${what} #${i + 1}: no id, dropped`);
+      else if (seen.has(x.id)) report(`${what} "${x.id}": repeated, the later one dropped`);
+      else return seen.add(x.id);
+      return false;
+    });
+  }
+  function cleanTier(tier, where, report) {
+    if (tier == null) return undefined;
+    if (!isObj(tier)) {
+      report(`${where}: tier is not an object, dropped`);
+      return undefined;
+    }
+    if (typeof tier.label !== "string") report(`${where}: tier has no name, named "档位"`);
+    const values = withIds(listOf(tier.values, `${where} tier values`, report), `${where} tier value`, report).map((v) => {
+      if (typeof v.label !== "string") report(`${where} tier value "${v.id}": no name, named by its id`);
+      return { ...v, label: typeof v.label === "string" ? v.label : v.id };
+    });
     return { ...tier, label: typeof tier.label === "string" ? tier.label : "档位", values };
   }
-  function cleanCategory(x) {
+  function cleanCategory(x, kind, report) {
+    const where = `${kind} "${x.id}"`;
+    if (typeof x.label !== "string") report(`${where}: no name, named by its id`);
     const out = { ...x, label: typeof x.label === "string" ? x.label : x.id };
-    const tier = cleanTier(x.tier);
+    const tier = cleanTier(x.tier, where, report);
     if (tier) out.tier = tier;
     else delete out.tier;
     return out;
   }
   /** A type with every field the editor reads; a type the designer adds is placed by hand (`manual`) until UE knows it. */
-  function cleanType(x) {
-    const out = cleanCategory(x);
-    if (typeof out.emoji !== "string") out.emoji = "";
-    if (typeof out.color !== "string") out.color = "#888888";
-    if (out.generate !== "auto" && out.generate !== "manual") out.generate = "manual";
+  function cleanType(x, report) {
+    const out = cleanCategory(x, "Type", report);
+    const filled = [];
+    if (typeof out.emoji !== "string") {
+      out.emoji = "";
+      filled.push("emoji");
+    }
+    if (typeof out.color !== "string") {
+      out.color = "#888888";
+      filled.push("color");
+    }
+    if (out.generate !== "auto" && out.generate !== "manual") {
+      out.generate = "manual";
+      filled.push("generate (manual)");
+    }
+    if (filled.length) report(`Type "${x.id}": ${filled.join(", ")} missing or invalid, default used`);
     return out;
   }
 
-  /** Copy of the document with stamp categories: its own when it has them (entries without an id, repeated ids and
-      malformed tiers dropped, missing fields filled, so a hand-edited file can't break the editor), else a copy of
-      `defaults`. */
+  /** The document's stamp categories cleaned (entries without an id, repeated ids and malformed tiers dropped, missing
+      fields filled, a tier of a type inside a group dropped: it picks from the group's), or a copy of `defaults` when it
+      has none; with the lines saying what the cleaning changed. */
+  function cleanStampCategories(doc, defaults) {
+    const problems = [];
+    const report = (line) => problems.push(line);
+    const has = doc != null && doc.stampCategories != null;
+    if (has && !isObj(doc.stampCategories)) report("stampCategories: not an object, the default categories used");
+    const c = has && isObj(doc.stampCategories) ? clone(doc.stampCategories) : clone(defaults || EMPTY_CATEGORIES);
+    const groups = withIds(listOf(c.groups, "groups", report), "Group", report).map((g) => cleanCategory(g, "Group", report));
+    const types = withIds(listOf(c.types, "types", report), "Type", report).map((t) => cleanType(t, report));
+    for (const t of types) {
+      if (t.tier && findIn(groups, t.group)) {
+        report(`Type "${t.id}": has its own tier inside group "${t.group}", dropped (it picks from the group's)`);
+        delete t.tier;
+      }
+    }
+    return { categories: { ...c, groups, types }, problems };
+  }
+
+  /** Copy of the document with stamp categories: its own, cleaned so a hand-edited file can't break the editor, else a
+      copy of `defaults` (cleanStampCategories). */
   function fillStampCategories(doc, defaults) {
-    const out = JSON.parse(JSON.stringify(doc));
-    const c = isObj(out.stampCategories) ? out.stampCategories : JSON.parse(JSON.stringify(defaults || EMPTY_CATEGORIES));
-    out.stampCategories = { ...c, groups: withIds(c.groups).map(cleanCategory), types: withIds(c.types).map(cleanType) };
+    const out = clone(doc);
+    out.stampCategories = cleanStampCategories(doc, defaults).categories;
     return out;
   }
+
+  /** What loading would change in the document's own stamp categories, one line each (empty when nothing, or when it
+      has none). Shown when a file is imported. */
+  const stampCategoryProblems = (doc) => cleanStampCategories(doc, EMPTY_CATEGORIES).problems;
 
   /** Element types offered in a layer's "Type" dropdown. layer: "structure" | "edge" | "stamp". */
   const typesForLayer = (vocab, layer) => (layer === "stamp" ? vocab.stamp.types : vocab.types.filter((t) => t.layer === layer));
@@ -307,10 +366,10 @@
   }
 
   /** Everything loading does to element types, in order: stamp categories (the defaults when the document has none) ->
-      old ids -> stamp anchors. `vocabulary` is mvmap-types.js. */
-  function migrateTypeData(doc, vocabulary) {
-    const withCategories = fillStampCategories(doc, vocabulary.defaultStampCategories);
-    return migrateStampAnchors(migrateTypeIds(withCategories, vocabulary.types, vocabulary.oldStampIds), vocabulary.types);
+      old ids -> stamp anchors. `typesFile` is mvmap-types.js. */
+  function migrateTypeData(doc, typesFile) {
+    const withCategories = fillStampCategories(doc, typesFile.defaultStampCategories);
+    return migrateStampAnchors(migrateTypeIds(withCategories, typesFile.types, typesFile.oldStampIds), typesFile.types);
   }
 
   /** A stamp leaving a type that locked its anchor gets SnapToGround back: that anchor was never the user's choice. */
@@ -423,22 +482,18 @@
      stamps are untouched. After the edit the stamps are repaired (repairStamps). Emoji and colour edits don't reach
      placed stamps: a stamp takes them only when it is brand-new and picks the type (chooseType). */
 
-  const clone = (x) => JSON.parse(JSON.stringify(x));
-  const findIn = (list, id) => (id != null && list.find((x) => x.id === id)) || null;
-
-  /** A fresh id for a group, type or tier value the designer adds: `prefix_` + six random base-36 characters, used by
-      no group, type or tier value of the document (so it is also safe as a UE typeId and an icon file name). */
-  function newCategoryId(doc, prefix) {
+  /** Ids a group, type or tier value the designer adds must not take (the panel draws a random one outside them, see
+      newCategoryId in src/util.ts): the document's groups, types and tier values, and the ids its stamps still hold
+      (typeId, typeGroup, tier), so a stamp left with a deleted id never ends up on a new entry. */
+  function usedCategoryIds(doc) {
     const c = (doc && doc.stampCategories) || EMPTY_CATEGORIES;
     const used = new Set();
     for (const x of [...c.groups, ...c.types]) {
       used.add(x.id);
       for (const v of (x.tier && x.tier.values) || []) used.add(v.id);
     }
-    for (;;) {
-      const id = `${prefix}_${Math.random().toString(36).slice(2).padEnd(6, "0").slice(0, 6)}`;
-      if (!used.has(id)) return id;
-    }
+    for (const st of (doc && doc.stamps) || []) for (const id of [st.typeId, st.typeGroup, st.tier]) if (isId(id)) used.add(id);
+    return used;
   }
 
   /** Clears, on every stamp of `out`, each id that named something in `before`'s categories and no longer does in
@@ -486,6 +541,76 @@
     return t && !findIn(c.groups, t.group) ? t : null;
   }
 
+  /** tierOwnerIn on the document's categories: the entry the panel shows a tier for (the same one the edits change). */
+  const stampTierOwner = (doc, owner) => tierOwnerIn((doc && doc.stampCategories) || EMPTY_CATEGORIES, owner);
+
+  /* ── renaming ids ─────────────────────────────────────────────────
+     A designer may give an entry they added a readable id (`Type_k3x9qa` -> `TreasureChest`): the UE side configures
+     placeholders and generation by typeId and tier value id, and names icons after the typeId. Ids that are in the
+     default categories (mvmap-types.js defaultStampCategories) are locked: the UE side is configured for them. When
+     the UE side starts to support a type a designer added, it goes into the defaults, which locks it too.
+     `ref` names the entry: { group }, { type }, or a tier value { group | type (its tier's owner), value }. */
+
+  /** Letters, digits and `_`, starting with a letter: usable as a UE config key and in an asset name. */
+  const ID_TEXT = /^[A-Za-z][A-Za-z0-9_]*$/;
+
+  /** The entry `ref` names in categories `c`, the list it is unique in, and for a tier value its tier; null when there
+      is none. */
+  function refEntry(c, ref) {
+    if (ref.value != null) {
+      const o = tierOwnerIn(c, ref);
+      const v = o && o.tier && findIn(o.tier.values, ref.value);
+      return v ? { kind: "value", entry: v, siblings: o.tier.values, tier: o.tier } : null;
+    }
+    if (ref.type != null) {
+      const t = findIn(c.types, ref.type);
+      return t ? { kind: "type", entry: t, siblings: c.types } : null;
+    }
+    const g = findIn(c.groups, ref.group);
+    return g ? { kind: "group", entry: g, siblings: c.groups } : null;
+  }
+
+  /** Whether the entry's id is one of the default categories' (at the same place: a tier value of the same owner). */
+  const isCategoryIdLocked = (ref, defaults) => !!refEntry(defaults || EMPTY_CATEGORIES, ref);
+
+  /** Why the entry can't be renamed to `id`, or null when it can (an unchanged id included): "missing" (no such
+      entry), "locked" (isCategoryIdLocked), "format" (not ID_TEXT), "taken" (another entry of the same list has it, or
+      a stamp still holds it as a stale id there: a stamp's typeId, a group-only stamp's typeGroup, or the tier value
+      of a stamp picking from the same tier; that stamp would otherwise end up on the renamed entry). */
+  function categoryIdProblem(doc, ref, id, defaults) {
+    const hit = refEntry(vocabOf(doc).stamp, ref);
+    if (!hit) return "missing";
+    if (id === hit.entry.id) return null;
+    if (isCategoryIdLocked(ref, defaults)) return "locked";
+    if (typeof id !== "string" || !ID_TEXT.test(id)) return "format";
+    if (hit.siblings.some((x) => x.id === id)) return "taken";
+    const v = vocabOf(doc);
+    const holds = (st) =>
+      hit.kind === "type" ? st.typeId === id : hit.kind === "group" ? st.typeGroup === id : st.tier === id && tierOf(st, "stamp", v) === hit.tier;
+    return (doc.stamps || []).some(holds) ? "taken" : null;
+  }
+
+  /** Copy of the document with the entry's id changed to `id`, and every reference to it: a group's types and its
+      group-only stamps' typeGroup; a type's stamps' typeId; a tier value on the stamps picking it from that tier.
+      Changes nothing when categoryIdProblem objects. */
+  function renameCategoryId(doc, ref, id, defaults) {
+    const out = clone(doc);
+    if (categoryIdProblem(doc, ref, id, defaults)) return out;
+    const before = refEntry(vocabOf(doc).stamp, ref);
+    const hit = refEntry(out.stampCategories, ref);
+    const old = hit.entry.id;
+    const v = vocabOf(doc);
+    (doc.stamps || []).forEach((st, i) => {
+      const o = out.stamps[i];
+      if (hit.kind === "type" && st.typeId === old) o.typeId = id;
+      if (hit.kind === "group" && st.typeGroup === old) o.typeGroup = id;
+      if (hit.kind === "value" && st.tier === old && tierOf(st, "stamp", v) === before.tier) o.tier = id;
+    });
+    if (hit.kind === "group") for (const t of out.stampCategories.types) if (t.group === old) t.group = id;
+    hit.entry.id = id;
+    return out;
+  }
+
   /** New group with no types and no tier, added last. An id already used by a group changes nothing. */
   function addStampGroup(doc, id, label) {
     return editCategories(doc, (c) => {
@@ -508,28 +633,27 @@
     });
   }
 
-  /** Fields of a group / type the panel edits. id, group (moveStampType), tier (the tier edits) and generate (a UE-side
-      fact) are not among them. */
-  const GROUP_FIELDS = ["label"];
+  /** Fields of a type the panel edits. id, group (moveStampType), tier (the tier edits) and generate (a UE-side fact)
+      are not among them. */
   const TYPE_FIELDS = ["label", "emoji", "color", "anchor", "anchorLocked"];
-  function patchFields(target, patch, fields) {
-    for (const k of fields) {
+  function patchType(t, patch) {
+    for (const k of TYPE_FIELDS) {
       if (!patch || !(k in patch)) continue;
       const v = patch[k];
       if (k === "anchor") {
-        if (isStampAnchor(v)) target.anchor = v;
+        if (isStampAnchor(v)) t.anchor = v;
       } else if (k === "anchorLocked") {
-        if (v) target.anchorLocked = true;
-        else delete target.anchorLocked;
-      } else target[k] = String(v);
+        if (v) t.anchorLocked = true;
+        else delete t.anchorLocked;
+      } else t[k] = String(v);
     }
   }
 
-  /** Group with `patch` ({ label }) applied. */
+  /** Group with `patch` ({ label }) applied: a group has only its name to edit. */
   function updateStampGroup(doc, id, patch) {
     return editCategories(doc, (c) => {
       const g = findIn(c.groups, id);
-      if (g) patchFields(g, patch, GROUP_FIELDS);
+      if (g && patch && "label" in patch) g.label = String(patch.label);
     });
   }
 
@@ -538,7 +662,7 @@
   function updateStampType(doc, id, patch) {
     return editCategories(doc, (c) => {
       const t = findIn(c.types, id);
-      if (t) patchFields(t, patch, TYPE_FIELDS);
+      if (t) patchType(t, patch);
     });
   }
 
@@ -641,10 +765,10 @@
   }
 
   return {
-    newCategoryId, addStampGroup, addStampType, updateStampGroup, updateStampType, moveStampType, removeStampType,
+    usedCategoryIds, stampTierOwner, isCategoryIdLocked, categoryIdProblem, renameCategoryId, addStampGroup, addStampType, updateStampGroup, updateStampType, moveStampType, removeStampType,
     removeStampGroup, setStampTier, removeStampTier, addTierValue, renameTierValue, removeTierValue, countStampsUsing,
     roomCode, parseRoomNumber, findUeFieldErrors, buildExportDoc, findRegion,
-    vocabOf, fillStampCategories, migrateTypeData,
+    vocabOf, fillStampCategories, stampCategoryProblems, migrateTypeData,
     typesForLayer, elementTypeOf, migrateTypeIds, defaultElementName, chooseType, manualMarkOf,
     typePickerEntries, groupMembers, typeGroupOf, chooseTypeGroup,
     tierOf, tierValueOf, chooseTier, elementStatusOf, statusLabelOf,

@@ -152,6 +152,44 @@ test("fillStampCategories cleans hand-edited categories: drops entries without a
   });
 });
 
+test("fillStampCategories drops the tier of a type inside a group (it picks from the group's); a type whose group is gone keeps it", () => {
+  const hand = {
+    groups: [{ id: "G", label: "g", tier: SIZE() }],
+    types: [
+      { id: "In", label: "in", group: "G", generate: "auto", color: "#000000", emoji: "i", tier: SIZE() },
+      { id: "Lost", label: "lost", group: "Gone", generate: "auto", color: "#000000", emoji: "l", tier: SIZE() },
+    ],
+  };
+  const [inG, lost] = UE.fillStampCategories({ stampCategories: hand }, CATEGORIES).stampCategories.types;
+  assert.ok(!("tier" in inG));
+  assert.deepEqual(lost.tier, SIZE());
+});
+
+test("stampCategoryProblems lists what loading changes in hand-edited categories, one line each", () => {
+  const hand = {
+    groups: [{ id: "G", tier: { values: [{ id: "a" }, { label: "no id" }, { id: "a", label: "again" }] } }, { label: "no id" }],
+    types: [{ id: "X", label: "x", tier: "big" }, { id: "X", label: "dup" }, { id: "In", label: "in", group: "G", generate: "auto", color: "#000000", emoji: "i", tier: SIZE() }],
+  };
+  assert.deepEqual(UE.stampCategoryProblems({ stampCategories: hand }), [
+    'Group #2: no id, dropped',
+    'Group "G": no name, named by its id',
+    'Group "G": tier has no name, named "档位"',
+    'Group "G" tier value #2: no id, dropped',
+    'Group "G" tier value "a": repeated, the later one dropped',
+    'Group "G" tier value "a": no name, named by its id',
+    'Type "X": repeated, the later one dropped',
+    'Type "X": tier is not an object, dropped',
+    'Type "X": emoji, color, generate (manual) missing or invalid, default used',
+    'Type "In": has its own tier inside group "G", dropped (it picks from the group\'s)',
+  ]);
+  assert.deepEqual(UE.stampCategoryProblems({ stampCategories: { groups: "x", types: [] } }), ["groups: not a list, ignored"]);
+  assert.deepEqual(UE.stampCategoryProblems({ stampCategories: [] }), ["stampCategories: not an object, the default categories used"]);
+  assert.deepEqual(UE.stampCategoryProblems({ name: "old file" }), [], "no categories at all: an old file, nothing to report");
+  assert.deepEqual(UE.stampCategoryProblems({ stampCategories: CATEGORIES }), [], "what the editor writes is clean");
+  const exported = UE.buildExportDoc(UE.fillStampCategories({ stamps: [] }, CATEGORIES), [], STRUCTURE_TYPES);
+  assert.deepEqual(UE.stampCategoryProblems(exported), [], "an exported file loads back without a report");
+});
+
 test("migrateTypeIds moves an old stamp id to its group / type / tier", () => {
   const doc = UE.fillStampCategories({
     stamps: [

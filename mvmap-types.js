@@ -75,7 +75,8 @@
            tier     - （可选，只用于没有大类的类型）档位
          tier（档位） - { label: 档位名（Inspector 里档位下拉的标题，如"大小"）, values: [{ id, label }] }。
                     取值 id 存进元素的 tier，在同一个档位里不重复。定义了档位的类型，元素选了取值才算选完
-       默认分类的 id 用可读的英文，UE 侧按它们配置；策划在编辑器里新建的用生成的 id。 */
+       默认分类的 id 用可读的英文，UE 侧按它们配置，分类面板里锁定、不能改。策划在编辑器里新建的先用生成的 id，
+       在面板里可以改成可读的英文。UE 侧开始支持某个策划新建的类型（配图标或生成物）时，把它连同 id 加进这里，它就锁定了。 */
     defaultStampCategories: {
       groups: [
         { id: "Enemy", label: "敌人", tier: { label: "强弱", values: [{ id: "Weak", label: "弱小" }, { id: "Medium", label: "中等" }, { id: "Elite", label: "精英" }] } }, // 2026-11-12 起强弱是档位

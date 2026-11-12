@@ -47,19 +47,21 @@ test("every edit returns a new document and leaves the input as it was", () => {
   assert.equal(JSON.stringify(doc), before);
 });
 
-test("newCategoryId: prefix + six base-36 characters, never an id the categories already use", () => {
+test("usedCategoryIds: every group, type and tier value id, plus the stale ids stamps still hold", () => {
+  const used = UE.usedCategoryIds(DOC());
+  for (const id of ["Bat", "Slime", "Empty", "Save", "Box", "BatA", "BatB", "SlimeA", "Weak", "Strong", "Red", "S", "L"]) assert.ok(used.has(id), id);
+  assert.ok(used.has("Gone"), "the ghost stamp's deleted type: a new type with that id would silently take the stamp over");
+  const doc = UE.removeTierValue(DOC(), { group: "Bat" }, "Strong");
+  assert.ok(!UE.usedCategoryIds(doc).has("Strong"), "repairStamps already cleared it from the stamps that had it");
+  assert.equal(UE.usedCategoryIds({}).size, 0);
+});
+
+test("stampTierOwner: the group, or the group-less type, a tier hangs on", () => {
   const doc = DOC();
-  const id = UE.newCategoryId(doc, "Type");
-  assert.match(id, /^Type_[0-9a-z]{6}$/);
-  const real = Math.random;
-  const draws = [0.5, 0.25]; // 0.5 gives "i00000", 0.25 gives "900000"
-  Math.random = () => draws.shift();
-  try {
-    const taken = UE.addTierValue(doc, { type: "Box" }, "Type_i00000", "taken");
-    assert.equal(UE.newCategoryId(taken, "Type"), "Type_900000", "an id a tier value uses is skipped");
-  } finally {
-    Math.random = real;
-  }
+  assert.equal(UE.stampTierOwner(doc, { group: "Bat" }).id, "Bat");
+  assert.equal(UE.stampTierOwner(doc, { type: "Box" }).id, "Box");
+  assert.equal(UE.stampTierOwner(doc, { type: "BatA" }), null, "a type inside a group has no tier of its own");
+  assert.equal(UE.stampTierOwner(doc, { group: "Nope" }), null);
 });
 
 test("addStampGroup / addStampType: added last; a new type is manual; an id in use changes nothing", () => {
@@ -225,4 +227,82 @@ test("an edited document still exports and loads back: incomplete stamps keep wh
   const back = UE.migrateTypeData(exported, { types: [], defaultStampCategories: CATEGORIES(), oldStampIds: [] });
   assert.deepEqual(back.stampCategories.types.map((t) => t.id), ["Save", "Box", "BatA", "SlimeA"], "the file's categories, not the defaults");
   assert.deepEqual(status(back, "batB"), ["incomplete", "Bat（未选小类）"]);
+});
+
+// Ids of the default categories (mvmap-types.js defaultStampCategories) are locked: the UE side is configured for them.
+const DEFAULTS = {
+  groups: [{ id: "Bat", label: "Bat", tier: { label: "Strength", values: [{ id: "Weak", label: "weak" }] } }],
+  types: [
+    { id: "Save", label: "Save" },
+    { id: "Box", label: "Box", tier: { label: "Size", values: [{ id: "S", label: "s" }] } },
+    { id: "BatA", label: "A", group: "Bat" },
+  ],
+};
+
+test("isCategoryIdLocked: ids of the default categories, at the same place", () => {
+  const locked = (ref) => UE.isCategoryIdLocked(ref, DEFAULTS);
+  for (const ref of [{ type: "Save" }, { type: "BatA" }, { group: "Bat" }, { group: "Bat", value: "Weak" }, { type: "Box", value: "S" }]) {
+    assert.ok(locked(ref), JSON.stringify(ref));
+  }
+  assert.ok(!locked({ type: "BatB" }) && !locked({ group: "Slime" }), "entries a designer added");
+  assert.ok(!locked({ group: "Bat", value: "Strong" }) && !locked({ type: "Box", value: "L" }), "a value added to a default tier");
+  assert.ok(!locked({ group: "Slime", value: "Weak" }), "the same id in another tier");
+});
+
+test("categoryIdProblem: locked, format, taken (in the same list, or a stale id a stamp holds there); unchanged is fine", () => {
+  const doc = DOC();
+  doc.stamps.push(stamp("slimeStale", { typeId: "SlimeA", tier: "Blue" })); // a value no longer in Slime's tier
+  const problem = (ref, id) => UE.categoryIdProblem(doc, ref, id, DEFAULTS);
+  assert.equal(problem({ type: "BatB" }, "BatBee"), null);
+  assert.equal(problem({ type: "BatB" }, "BatB"), null, "unchanged");
+  assert.equal(problem({ type: "Nope" }, "X"), "missing");
+  assert.equal(problem({ type: "Save" }, "SavePoint"), "locked");
+  assert.equal(problem({ group: "Bat", value: "Weak" }, "Feeble"), "locked");
+  for (const bad of ["1Bat", "Bat-B", "蝙蝠", "_Bat", "Bat B", ""]) assert.equal(problem({ type: "BatB" }, bad), "format", bad);
+  assert.equal(problem({ type: "BatB" }, "Box"), "taken");
+  assert.equal(problem({ type: "BatB" }, "Gone"), "taken", "the ghost stamp still holds typeId Gone");
+  assert.equal(problem({ type: "BatB" }, "Slime"), null, "a group's id: groups and types are separate lists");
+  assert.equal(problem({ group: "Slime" }, "Bat"), "taken");
+  assert.equal(problem({ group: "Bat", value: "Strong" }, "Weak"), "taken");
+  assert.equal(problem({ group: "Slime", value: "Red" }, "Strong"), null, "another tier's value");
+  assert.equal(problem({ group: "Slime", value: "Red" }, "Blue"), "taken", "a Slime stamp still holds Blue");
+  assert.equal(problem({ type: "Box", value: "L" }, "Blue"), null, "Blue is stale only in Slime's tier");
+});
+
+test("renameCategoryId: a type's stamps follow it", () => {
+  const out = UE.renameCategoryId(DOC(), { type: "BatB" }, "BatBee", DEFAULTS);
+  assert.deepEqual(out.stampCategories.types.find((t) => t.id === "BatBee")?.group, "Bat");
+  assert.equal(byId(out, "batB").typeId, "BatBee");
+  assert.deepEqual(status(out, "batB"), ["complete", ""]);
+});
+
+test("renameCategoryId: a group's types and its group-only stamps follow it", () => {
+  const doc = DOC();
+  doc.stamps.push(stamp("slimeOnly", { typeId: null, typeGroup: "Slime" }));
+  const out = UE.renameCategoryId(doc, { group: "Slime" }, "Ooze", DEFAULTS);
+  assert.equal(out.stampCategories.types.find((t) => t.id === "SlimeA").group, "Ooze");
+  assert.equal(byId(out, "slimeOnly").typeGroup, "Ooze");
+  assert.deepEqual(status(out, "slimeOnly"), status(doc, "slimeOnly"));
+});
+
+test("renameCategoryId: a tier value changes on the stamps of that tier only", () => {
+  const doc = DOC();
+  doc.stamps.push(stamp("slimeWeak", { typeId: "SlimeA", tier: "Weak" }));
+  const out = UE.renameCategoryId(doc, { group: "Slime", value: "Weak" }, "Feeble", DEFAULTS);
+  assert.deepEqual(out.stampCategories.groups.find((g) => g.id === "Slime").tier.values.map((v) => v.id), ["Red", "Feeble"]);
+  assert.equal(byId(out, "slimeWeak").tier, "Feeble");
+  assert.equal(byId(out, "batA").tier, "Weak", "Bat's Weak is another value");
+  assert.equal(byId(out, "ghost").tier, "Weak", "a stamp without a known type picks from no tier");
+  assert.deepEqual(status(out, "slimeWeak"), ["complete", ""]);
+  const bat = UE.renameCategoryId(DOC(), { group: "Bat", value: "Strong" }, "Mighty", DEFAULTS);
+  assert.deepEqual([byId(bat, "batB").tier, byId(bat, "batOnly").tier], ["Mighty", "Mighty"]);
+});
+
+test("renameCategoryId changes nothing when categoryIdProblem objects, and leaves the input as it was", () => {
+  const doc = DOC();
+  const before = JSON.stringify(doc);
+  assert.deepEqual(UE.renameCategoryId(doc, { type: "BatB" }, "Box", DEFAULTS), doc);
+  assert.deepEqual(UE.renameCategoryId(doc, { type: "Save" }, "SavePoint", DEFAULTS), doc);
+  UE.renameCategoryId(doc, { type: "BatB" }, "BatBee", DEFAULTS);
+  assert.equal(JSON.stringify(doc), before);
 });

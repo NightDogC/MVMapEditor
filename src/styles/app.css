@@ -13,6 +13,7 @@
   --acc: #5aa9f0;
   --acc-2: #2b6fae;
   --danger: #e0555f;
+  --warn: #e7a35b;
   --ok: #3fb27f;
   --radius: 6px;
   --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
@@ -370,10 +371,10 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.row.untyped .nm {
+.row.not-complete .nm {
   color: var(--danger);
 }
-.untyped-tag {
+.status-tag {
   font-size: 10px;
   color: var(--danger);
   border: 1px solid var(--danger);
@@ -861,7 +862,28 @@ textarea {
   padding: 0 4px;
 }
 .cat-gen.manual {
-  color: #e7a35b;
+  color: var(--warn);
+}
+.cat-id {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--tx-dim);
+  background: none;
+  border: 1px dashed var(--line-2);
+  border-radius: 4px;
+  padding: 0 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cat-id:hover:not(.locked) {
+  color: var(--tx);
+  border-color: var(--acc);
+}
+.cat-id.locked {
+  color: var(--tx-mute);
+  border-style: solid;
+  border-color: var(--line);
+  cursor: default;
 }
 .cat-used {
   min-width: 56px;

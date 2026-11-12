@@ -131,10 +131,10 @@ function renderKeys(): void {
 
 /** List row extras for an element the UE importer can't generate yet: a class that turns its name red, and a tag
     saying why ("未分类", "钱盒（未选大小）"). */
-const untyped = (it: Typed, layer: ElementLayer) => UE.elementStatusOf(it, layer, vocabOf(S.doc)) !== "complete";
-const untypedTag = (it: Typed, layer: ElementLayer) => {
+const notComplete = (it: Typed, layer: ElementLayer) => UE.elementStatusOf(it, layer, vocabOf(S.doc)) !== "complete";
+const statusTag = (it: Typed, layer: ElementLayer) => {
   const label = UE.statusLabelOf(it, layer, vocabOf(S.doc));
-  return label ? `<span class="untyped-tag">${esc(label)}</span>` : "";
+  return label ? `<span class="status-tag">${esc(label)}</span>` : "";
 };
 
 function renderStructs(): void {
@@ -147,10 +147,10 @@ function renderStructs(): void {
   const selId = S.sel && S.sel.type === "struct" ? S.sel.id : null;
   host.innerHTML = S.doc.structures
     .map(
-      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "structure") ? "untyped" : ""}" data-struct="${s.id}">
+      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${notComplete(s, "structure") ? "not-complete" : ""}" data-struct="${s.id}">
           <span class="swatch" style="background:${structColor(s)}"></span>
           <span class="nm">${esc(s.name)}${s.id === S.activeStructId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
-          ${untypedTag(s, "structure")}
+          ${statusTag(s, "structure")}
           <span class="sub" title="Area in cells">${num(area(sT(s)) / (TICKS * TICKS))}</span>
         </div>`
     )
@@ -167,10 +167,10 @@ function renderEdgeStructs(): void {
   const selId = S.sel && S.sel.type === "edge" ? S.sel.id : null;
   host.innerHTML = S.doc.edgeStructs
     .map(
-      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "edge") ? "untyped" : ""}" data-edge="${s.id}">
+      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${notComplete(s, "edge") ? "not-complete" : ""}" data-edge="${s.id}">
           <span class="swatch" style="background:${structColor(s)};height:4px;border-radius:2px"></span>
           <span class="nm">${esc(s.name)}${s.id === S.activeEdgeId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
-          ${untypedTag(s, "edge")}
+          ${statusTag(s, "edge")}
           <span class="sub" title="Total length in cells">${num(eT(s).reduce((a, g) => a + segLength(g), 0) / TICKS)}</span>
         </div>`
     )
@@ -187,10 +187,10 @@ function renderStamps(): void {
   const selId = S.sel && S.sel.type === "stamp" ? S.sel.id : null;
   host.innerHTML = S.doc.stamps
     .map(
-      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${untyped(s, "stamp") ? "untyped" : ""}" data-stamp="${s.id}">
+      (s) => `<div class="row ${s.id === selId ? "on" : ""} ${notComplete(s, "stamp") ? "not-complete" : ""}" data-stamp="${s.id}">
           <span class="emo">${esc(s.emoji)}</span>
           <span class="nm">${esc(s.name)}${s.id === S.activeStampId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
-          ${untypedTag(s, "stamp")}
+          ${statusTag(s, "stamp")}
           <span class="sub" title="Placed copies">${s.points.length}</span>
         </div>`
     )

@@ -6,10 +6,33 @@
 import type { MapDoc, StampAnchor, StampType } from "../model/types.ts";
 import { S, pushUndo, commit, undo, redo, undoStack, redoStack } from "../state/store.ts";
 import { STAMP_EMOJI, STRUCT_COLORS, pickEmoji } from "../model/constants.ts";
-import { UE, type TierOwner, type StampUsageRef } from "../ue.ts";
-import { $, esc } from "../util.ts";
+import { UE, TYPES_FILE, type TierOwner, type StampUsageRef, type CategoryIdRef, type CategoryIdProblem } from "../ue.ts";
+import { $, esc, newCategoryId } from "../util.ts";
 
 const ANCHOR_TEXT: Record<StampAnchor, string> = { SnapToGround: "贴地", FloatInAir: "悬空" };
+
+/* Ids: shown after each name as a button that renames it (mvmap-ue.js renameCategoryId). Ids of the default
+   categories are locked: the UE side is configured for them. */
+const DEFAULTS = TYPES_FILE.defaultStampCategories;
+const ID_LOCKED_TIP = "默认分类里的 id，UE 侧已经按它配置，不能改";
+const ID_TIP = "点击改 id：UE 侧按它配置生成物和图标，用到它的元素会一起改";
+const ID_PROMPT = "新的 id：英文字母开头，只用字母、数字和 _（如 TreasureChest）。\nUE 侧按它配置生成物和图标（图标名 T_Emoji_MVMap_<id>），用到它的元素会一起改。";
+const ID_PROBLEM_TEXT: Record<CategoryIdProblem, string> = {
+  missing: "找不到这一项，可能已经被删除。",
+  locked: ID_LOCKED_TIP + "。",
+  format: "id 要以英文字母开头，只用字母、数字和 _。",
+  taken: "这个 id 已经被用了：同一层里的另一项，或者元素上还留着的旧 id。",
+};
+
+/** Button showing an entry's id; a click renames it. `owner` is the group or type, or the tier's owner with `value`. */
+function idButton(owner: TierOwner, value?: string): string {
+  const ref: CategoryIdRef = value != null ? { ...owner, value } : owner;
+  const id = value ?? owner.group ?? owner.type;
+  const locked = UE.isCategoryIdLocked(ref, DEFAULTS);
+  const valueAttr = value != null ? ` data-idvalue="${esc(value)}"` : "";
+  // not `disabled`: a disabled button shows no tooltip in some browsers, and a click says why instead
+  return `<button class="cat-id${locked ? " locked" : ""}" data-idowner="${esc(ownerKey(owner))}"${valueAttr} title="${locked ? ID_LOCKED_TIP : ID_TIP}">${esc(id)}</button>`;
+}
 
 /** Owner of a tier as a data attribute: "group:<id>" / "type:<id>". */
 const ownerKey = (o: TierOwner) => (o.group != null ? "group:" + o.group : "type:" + o.type);
@@ -44,13 +67,8 @@ function apply(next: MapDoc, opts: { focus?: string; keep?: boolean } = {}): boo
   return true;
 }
 
-/** The group or group-less type a tier hangs on, as mvmap-ue.js reads it: a type inside a group has none of its own. */
-const tierHolder = (owner: TierOwner) => {
-  const c = cats();
-  if (owner.group != null) return c.groups.find((g) => g.id === owner.group);
-  const t = c.types.find((x) => x.id === owner.type);
-  return t && !c.groups.some((g) => g.id === t.group) ? t : undefined;
-};
+/** The group or group-less type a tier hangs on, the same one the tier edits change: a type inside a group has none. */
+const tierHolder = (owner: TierOwner) => UE.stampTierOwner(S.doc, owner);
 
 function tierHtml(owner: TierOwner): string {
   const ok = ownerKey(owner);
@@ -61,7 +79,8 @@ function tierHtml(owner: TierOwner): string {
   const values = tier.values
     .map(
       (v) => `<span class="cat-val">
-        <input type="text" data-k="vlabel:${esc(ok)}:${esc(v.id)}" data-vlabel="${esc(v.id)}" data-owner="${esc(ok)}" value="${esc(v.label)}" spellcheck="false" title="id: ${esc(v.id)} · ${used({ ...owner, value: v.id })} 个元素" />
+        <input type="text" data-k="vlabel:${esc(ok)}:${esc(v.id)}" data-vlabel="${esc(v.id)}" data-owner="${esc(ok)}" value="${esc(v.label)}" spellcheck="false" title="${used({ ...owner, value: v.id })} 个元素" />
+        ${idButton(owner, v.id)}
         <button class="mini" data-delval="${esc(v.id)}" data-owner="${esc(ok)}" title="Delete this value">×</button>
       </span>`,
     )
@@ -82,7 +101,8 @@ function typeHtml(t: StampType): string {
   const id = esc(t.id);
   return `<div class="cat-type">
       <input type="text" class="cat-emoji" data-k="temoji:${id}" data-temoji="${id}" value="${esc(t.emoji)}" autocomplete="off" spellcheck="false" title="Emoji for new stamps of this type (Win + .); placed stamps keep theirs" />
-      <input type="text" class="cat-name" data-k="tlabel:${id}" data-tlabel="${id}" value="${esc(t.label)}" spellcheck="false" title="typeId: ${id}" />
+      <input type="text" class="cat-name" data-k="tlabel:${id}" data-tlabel="${id}" value="${esc(t.label)}" spellcheck="false" />
+      ${idButton({ type: t.id })}
       <input type="color" data-k="tcolor:${id}" data-tcolor="${id}" value="${esc(t.color)}" title="Colour for new stamps of this type; placed stamps keep theirs" />
       <select data-k="tgroup:${id}" data-tgroup="${id}" title="Group">
         <option value="" ${gid ? "" : "selected"}>（无大类）</option>
@@ -107,7 +127,8 @@ function panelHtml(): string {
       return `<section class="cat-group">
         <div class="cat-head">
           <span class="cat-k">大类</span>
-          <input type="text" class="cat-name" data-k="glabel:${esc(g.id)}" data-glabel="${esc(g.id)}" value="${esc(g.label)}" spellcheck="false" title="id: ${esc(g.id)}" />
+          <input type="text" class="cat-name" data-k="glabel:${esc(g.id)}" data-glabel="${esc(g.id)}" value="${esc(g.label)}" spellcheck="false" />
+          ${idButton({ group: g.id })}
           ${usedTag({ group: g.id })}
           <span class="spacer"></span>
           <button class="btn cat-small" data-addtype="${esc(g.id)}">+ 类型</button>
@@ -130,7 +151,8 @@ function panelHtml(): string {
       <button class="tb" id="cat-redo" title="Redo (Ctrl+Y)" ${redoStack.length ? "" : "disabled"}>↷</button>
     </div>
     <p class="sub">这个地图自己的 stamp 分类，别的地图不受影响。改名不影响元素；删除时用到它的元素保留下来，变成未选完或未分类（标红）。
-      emoji、颜色、默认 anchor 只用于之后新建的元素。generate 由 UE 侧决定，新建的类型是 manual：UE 侧改好之前只生成占位。</p>
+      emoji、颜色、默认 anchor 只用于之后新建的元素。generate 由 UE 侧决定，新建的类型是 manual：UE 侧改好之前只生成占位。
+      名字后面是 id，UE 侧按它配置：新建的可以点开改成可读的英文（如 TreasureChest），默认分类里的锁定。</p>
     <div class="btn-row cat-actions">
       <button class="btn" id="cat-addtype">+ 类型</button>
       <button class="btn" id="cat-addgroup">+ 大类</button>
@@ -144,13 +166,20 @@ function panelHtml(): string {
   </div>`;
 }
 
-/** Text of a delete confirmation: what goes, and how many stamps change. */
-const confirmDelete = (what: string, n: number, after: string) => confirm(`${what}\n${n} 个元素在用${n ? `，删除后${after}` : ""}。`);
+/** Text of a delete confirmation: what goes, how many stamps change, and `extra` lines for side effects. */
+const confirmDelete = (what: string, n: number, after: string, extra: string[] = []) =>
+  confirm([`${what}\n${n} 个元素在用${n ? `，删除后${after}` : ""}。`, ...extra].join("\n"));
+
+/** "N 个元素的 anchor 回到贴地" when a delete gives stamps another anchor (their type locked it), else nothing. */
+function anchorNote(next: MapDoc): string[] {
+  const n = next.stamps.filter((st, i) => st.anchor !== S.doc.stamps[i].anchor).length;
+  return n ? [`其中 ${n} 个元素的 anchor 回到贴地（原来由类型锁定）。`] : [];
+}
 
 function bind(box: HTMLElement): void {
   const all = <T extends HTMLElement>(sel: string) => box.querySelectorAll<T>(sel);
   const typeOf = (id: string) => cats().types.find((t) => t.id === id);
-  const fresh = (prefix: string) => UE.newCategoryId(S.doc, prefix);
+  const fresh = (prefix: string) => newCategoryId(UE.usedCategoryIds(S.doc), prefix);
   const addType = (group?: string) => {
     const id = fresh("Type");
     const n = cats().types.length;
@@ -167,6 +196,24 @@ function bind(box: HTMLElement): void {
   $("#cat-undo").onclick = undo;
   $("#cat-redo").onclick = redo;
   all("[data-addtype]").forEach((b) => (b.onclick = () => addType(b.dataset.addtype)));
+  all<HTMLButtonElement>("[data-idowner]").forEach((b) => {
+    b.onclick = () => {
+      const owner = ownerOf(b.dataset.idowner!);
+      const value = b.dataset.idvalue;
+      const ref: CategoryIdRef = value != null ? { ...owner, value } : owner;
+      const current = value ?? owner.group ?? owner.type;
+      if (b.classList.contains("locked")) {
+        alert(ID_PROBLEM_TEXT.locked);
+        return;
+      }
+      const input = prompt(ID_PROMPT, current);
+      const id = input?.trim();
+      if (!id || id === current) return;
+      const problem = UE.categoryIdProblem(S.doc, ref, id, DEFAULTS);
+      if (problem) alert(ID_PROBLEM_TEXT[problem]);
+      else apply(UE.renameCategoryId(S.doc, ref, id, DEFAULTS));
+    };
+  });
 
   /* Text fields commit on change (blur / Enter) without redrawing the panel (see apply). `edit` returns the edited
      document and the text the field should show (the emoji actually kept); null puts the stored text back. */
@@ -238,7 +285,8 @@ function bind(box: HTMLElement): void {
       if (!t) return;
       const g = cats().groups.find((x) => x.id === t.group);
       const after = g ? `保留大类「${g.label}」，变成未选完` : "变成未分类";
-      if (confirmDelete(`删除类型「${t.label}」？`, used({ type: id }), after)) apply(UE.removeStampType(S.doc, id));
+      const next = UE.removeStampType(S.doc, id);
+      if (confirmDelete(`删除类型「${t.label}」？`, used({ type: id }), after, anchorNote(next))) apply(next);
     };
   });
   all("[data-delgroup]").forEach((b) => {
@@ -247,7 +295,8 @@ function bind(box: HTMLElement): void {
       const g = cats().groups.find((x) => x.id === id);
       if (!g) return;
       const k = cats().types.filter((t) => t.group === id).length;
-      if (confirmDelete(`删除大类「${g.label}」${k ? `和它下面的 ${k} 个类型` : ""}？`, used({ group: id }), "变成未分类")) apply(UE.removeStampGroup(S.doc, id));
+      const next = UE.removeStampGroup(S.doc, id);
+      if (confirmDelete(`删除大类「${g.label}」${k ? `和它下面的 ${k} 个类型` : ""}？`, used({ group: id }), "变成未分类", anchorNote(next))) apply(next);
     };
   });
   all("[data-addtier]").forEach((b) => {
@@ -275,7 +324,9 @@ function bind(box: HTMLElement): void {
       const tier = tierHolder(owner)?.tier;
       const v = tier?.values.find((x) => x.id === b.dataset.delval);
       if (!tier || !v) return;
-      if (confirmDelete(`删除取值「${v.label}」？`, used({ ...owner, value: v.id }), `变成"未选${tier.label}"`))
+      // the last value: the tier stays, empty, and every stamp picking from it is 未选完 until a value is added
+      const last = tier.values.length === 1 ? [`这是「${tier.label}」的最后一个取值：删除后档位没有取值，用这个档位的元素都选不完（标红）。`] : [];
+      if (confirmDelete(`删除取值「${v.label}」？`, used({ ...owner, value: v.id }), `变成"未选${tier.label}"`, last))
         apply(UE.removeTierValue(S.doc, owner, v.id));
     };
   });

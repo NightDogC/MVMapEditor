@@ -68,7 +68,9 @@ const HELP = `
      to remove one. Click a placed stamp to select it and drag to move just that copy.</p>
   <p>A stamp's <b>Type</b> comes from this map's stamp categories: groups (敌人 ▸), types and tiers (强弱, 大小).
      <b>Stamp 分类…</b> in the top bar edits them. Renaming never changes a stamp; deleting asks first, and the stamps
-     using it stay, shown red until they are picked again. Emoji and colour changes apply to new stamps only.</p>
+     using it stay, shown red until they are picked again. Emoji and colour changes apply to new stamps only. The id
+     after each name is what UE configures by: click it to give an entry you added a readable English id
+     (TreasureChest); the default categories' ids are locked.</p>
   <h3>Notes</h3>
   <p>A <b>note</b> is a standalone annotation the size of one cell, drawn above everything else. Click with the
      <b>Note</b> tool to add one, then write its details in the Inspector. The <b>+</b>
