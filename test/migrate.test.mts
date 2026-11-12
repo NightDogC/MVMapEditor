@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { migrate, cellsToRects, edgesToSegs } from "../src/model/doc.ts";
+import { migrate, cellsToRects, edgesToSegs, hasStampPointWithoutId } from "../src/model/doc.ts";
 
 const require = createRequire(import.meta.url);
 const UE = require("../mvmap-ue.js");
@@ -42,7 +42,7 @@ test("migrate converts a 1.x file to version 2 and drops the old fields", () => 
   assert.ok(!("cells" in d.structures[0]));
   assert.equal(d.edgeStructs[0].segs.length, 2);
   assert.ok(!("edges" in d.edgeStructs[0]));
-  assert.deepEqual(d.stamps[0].points, [{ x: 6, y: 4 }, { x: 7, y: 4 }]);
+  assert.deepEqual(d.stamps[0].points.map(({ x, y }) => ({ x, y })), [{ x: 6, y: 4 }, { x: 7, y: 4 }]);
   assert.ok(!("cells" in d.stamps[0]));
   assert.deepEqual([d.notes[0].x, d.keys[0].x], [2, 9]);
   assert.deepEqual(d.rooms[0].cells, ["0,0", "1,0"], "rooms stay on whole cells");
@@ -71,6 +71,61 @@ test("UE buildExportDoc keeps the version-2 geometry untouched", () => {
   assert.deepEqual(out.edgeStructs[0].segs, d.edgeStructs[0].segs);
   assert.deepEqual(out.stamps[0].points, d.stamps[0].points);
   assert.equal(out.version, 2);
+});
+
+const idsOf = (d: { stamps: { points: { id: string }[] }[] }) => d.stamps.flatMap((s) => s.points.map((p) => p.id));
+
+test("migrate gives every stamp point without an id a new one, unique across the map, in the element-id format", () => {
+  const d = migrate({
+    stamps: [
+      { id: "m1", name: "a", emoji: "⭐", color: "#fff", notes: "", points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] },
+      { id: "m2", name: "b", emoji: "⭐", color: "#fff", notes: "", points: [{ x: 5, y: 6 }] },
+    ],
+  });
+  const ids = idsOf(d);
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids).size, 3);
+  for (const id of ids) assert.match(id, /^pt_[a-z0-9]+$/);
+});
+
+test("migrate keeps stored point ids, and replaces an empty, non-string or repeated one", () => {
+  const d = migrate({
+    stamps: [
+      { id: "m1", name: "a", emoji: "⭐", color: "#fff", notes: "", points: [{ id: "pt_keep", x: 1, y: 2 }, { id: "", x: 3, y: 4 }, { id: 7, x: 5, y: 6 }] },
+      { id: "m2", name: "b", emoji: "⭐", color: "#fff", notes: "", points: [{ id: "pt_keep", x: 9, y: 9 }] },
+    ],
+  });
+  const ids = idsOf(d);
+  assert.equal(ids[0], "pt_keep");
+  assert.equal(new Set(ids).size, 4);
+  assert.ok(ids.slice(1).every((id) => id !== "pt_keep" && /^pt_/.test(id)));
+});
+
+test("a 1.x file's stamp cells become points with ids; loading the result again keeps them", () => {
+  const once = migrate(v1());
+  assert.equal(new Set(idsOf(once)).size, 2);
+  assert.deepEqual(idsOf(migrate(JSON.parse(JSON.stringify(once)))), idsOf(once));
+});
+
+test("hasStampPointWithoutId tells whether loading would hand out new point ids (so the editor saves them right away)", () => {
+  assert.equal(hasStampPointWithoutId(v1()), true, "1.x stamp cells");
+  const once = migrate(v1());
+  assert.equal(hasStampPointWithoutId(once), false, "after migrate every point has a unique id");
+  const st = (points: unknown[]) => ({ stamps: [{ id: "m", points }] });
+  assert.equal(hasStampPointWithoutId(st([{ id: "pt_1", x: 0, y: 0 }, { x: 1, y: 0 }])), true, "one point without an id");
+  assert.equal(hasStampPointWithoutId({ stamps: [{ id: "a", points: [{ id: "pt_1", x: 0, y: 0 }] }, { id: "b", points: [{ id: "pt_1", x: 1, y: 0 }] }] }), true, "repeated id");
+  assert.equal(hasStampPointWithoutId({}), false);
+});
+
+test("migrate with the vocabulary fills each stamp's anchor: the type's default, a locked type's anchor, SnapToGround when untyped", () => {
+  const load = (x: unknown) => migrate(x, (d) => UE.migrateStampAnchors(UE.migrateTypeIds(d, TYPES.types, TYPES.groupOldIds), TYPES.types));
+  const st = (id: string, typeId: string, anchor?: string) => ({ id, name: id, emoji: "⭐", color: "#fff", notes: "", typeId, anchor, points: [] });
+  const d = load({
+    stamps: [st("a", "SavePoint"), st("b", "WeakFlyingEnemy"), st("c", "MoneyBox"), st("d", "MoneyBoxLarge", "FloatInAir"), st("e", "EnemyWeakFlying", "SnapToGround")],
+  });
+  assert.deepEqual(d.stamps.map((s) => s.anchor), ["SnapToGround", "FloatInAir", "SnapToGround", "FloatInAir", "FloatInAir"]);
+  assert.equal(d.stamps[1].typeId, "EnemyWeakFlying", "renamed before the anchor is filled");
+  assert.deepEqual([d.stamps[2].typeId, d.stamps[2].typeGroup], [null, "钱盒"], "split type: group picked, still unclassified");
 });
 
 test("grey-box data from older files is dropped on load", () => {

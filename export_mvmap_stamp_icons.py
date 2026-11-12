@@ -1,9 +1,9 @@
 """
-MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里 manual 类型的 emoji 渲染成 png，给 UE 导入工具当占位图标
+MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里会生成占位的类型的 emoji 渲染成 png，给 UE 导入工具当占位图标
 
 做法：
     用本机的 Chrome / Edge 无头模式打开一个临时页面。页面加载 MVMapEditor 的词表 mvmap-types.js，
-    再用和编辑器画 stamp 完全相同的画法（canvas fillText、同一组 emoji 字体）逐个画出 manual 类型的 emoji，
+    再用和编辑器画 stamp 完全相同的画法（canvas fillText、同一组 emoji 字体）逐个画出这些类型的 emoji，
     导出为带透明通道的 png。浏览器和字体都和编辑器里看到的是同一套，所以图标一致。
 
     字体组是从 MVMapEditor 的源码（src/ 下的 .ts 文件）里读出来的。编辑器改了 stamp 的画法、找不到这组字体时，
@@ -14,9 +14,10 @@ MVMap 占位图标导出工具 —— 把 MVMapEditor 词表里 manual 类型的
     找不到它时只跳过这一步并给出警告。
 
 输出：
-    <输出目录>/T_Emoji_MVMap_<typeId>.png，例如 T_Emoji_MVMap_SavePoint.png。导出词表里所有 generate 为 manual 的类型：
-    全部 stamp，以及 manual 的 structure / edge 类型（如单向门、隐藏区域）。后两者在编辑器地图上不画 emoji，
-    用的是词表里给它们配的 emoji，画法和 stamp 相同。
+    <输出目录>/T_Emoji_MVMap_<typeId>.png，例如 T_Emoji_MVMap_SavePoint.png。导出的类型：
+    - 全部 stamp，manual 和 auto 都导出：auto 的 stamp（存档点、钱盒、敌人等）生成游戏物体时也保留一个占位，挂在生成物下面；
+    - manual 的 structure / edge 类型（如单向门、隐藏区域）。它们在编辑器地图上不画 emoji，用的是词表里给它们配的 emoji，
+      画法和 stamp 相同。auto 的 structure / edge 类型（地形、可下落平台等）不生成占位，不导出。
 
 用法：
     python export_mvmap_stamp_icons.py                      （默认输出到本目录下的 StampIcons/，由 P4 管理、git 不跟踪）
@@ -80,7 +81,7 @@ PAGE_TEMPLATE = """<!doctype html>
   try {{
     await document.fonts.load(font);
   }} catch (e) {{}}
-  for (const t of MVMapTypes.types.filter((x) => x.generate === "manual")) {{
+  for (const t of MVMapTypes.types.filter((x) => x.generate === "manual" || x.layer === "stamp")) {{
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext("2d");
@@ -167,7 +168,7 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-    parser = argparse.ArgumentParser(description="把 MVMapEditor 词表里 manual 类型的 emoji 渲染成 UE 占位图标 png")
+    parser = argparse.ArgumentParser(description="把 MVMapEditor 词表里会生成占位的类型（全部 stamp、manual 的 structure / edge）的 emoji 渲染成 UE 占位图标 png")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"输出目录，默认 {DEFAULT_OUT}")
     parser.add_argument("--size", type=int, default=256, help="贴图边长（像素），必须是 2 的次幂，默认 256")
     args = parser.parse_args()
@@ -182,7 +183,7 @@ def main() -> int:
 
     rendered = render(browser, args.size, font_stack)
     if not rendered:
-        sys.exit("词表里没有 manual 类型。")
+        sys.exit("词表里没有要导出图标的类型。")
 
     args.out.mkdir(parents=True, exist_ok=True)
     written = []

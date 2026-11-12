@@ -1,8 +1,8 @@
 import "./styles/app.css";
 import { S, app, reindex, migrateDoc } from "./state/store.ts";
-import { Store, setStatus, importV1Library, LAST_KEY } from "./state/persist.ts";
+import { Store, setStatus, scheduleSave, importV1Library, LAST_KEY } from "./state/persist.ts";
 import { loadSnap } from "./state/snap.ts";
-import { newDoc } from "./model/doc.ts";
+import { newDoc, hasStampPointWithoutId } from "./model/doc.ts";
 import { resizeCanvas, fitWorld } from "./render/view.ts";
 import { worldCanvas, wctx, frame } from "./render/world.ts";
 import { docBBox } from "./state/layers.ts";
@@ -36,6 +36,8 @@ async function boot(): Promise<void> {
   if (lastId) doc = (await Store.all()).find((d) => d.id === lastId) || null;
 
   S.doc = migrateDoc(doc || newDoc());
+  // Point ids given on load are random: save them now, or the next reload (and export) would carry other ones.
+  if (doc && hasStampPointWithoutId(doc)) scheduleSave();
   S.activeAreaId = S.doc.areas[0].id;
   $<HTMLInputElement>("#map-name").value = S.doc.name;
   const chk = (id: string, v: boolean) => ($<HTMLInputElement>(id).checked = v);

@@ -181,7 +181,8 @@ Mouse: scroll to zoom, middle-drag to pan.
 
   "stamps": [
     { "id": "stamp_m1", "name": "Save Point", "emoji": "💾", "color": "#5aa9f0",
-      "notes": "", "points": [ { "x": 6, "y": 4 }, { "x": 9.25, "y": 2.5 } ] }
+      "notes": "", "typeId": "SavePoint", "anchor": "SnapToGround",   // UE import fields, see below
+      "points": [ { "id": "pt_a1", "x": 6, "y": 4 }, { "id": "pt_a2", "x": 9.25, "y": 2.5 } ] }
   ],
 
   "pencil": [
@@ -215,7 +216,7 @@ Mouse: scroll to zoom, middle-drag to pan.
 
 **Structure rects** are axis-aligned `{ x, y, w, h }` on an independent layer: an area can be in one room *and* one structure. The layer is exclusive — no point belongs to two structures, and a structure's own rects never overlap. They are kept in a canonical form: the area is cut into horizontal bands at every rect edge, each band's maximal runs are taken, and a run is stacked onto the rect above it when that rect has exactly the same x-range. The same area always gives the same list, and each connected piece's rects are exactly the canonical form of that piece.
 
-**Stamp points**, **keys** and **notes** are `{ x, y }`, the top-left corner of the one-cell box they occupy; the centre is `(x + 0.5, y + 0.5)`. No two stamps share exactly the same point.
+**Stamp points**, **keys** and **notes** are `{ x, y }`, the top-left corner of the one-cell box they occupy; the centre is `(x + 0.5, y + 0.5)`. No two stamps share exactly the same point. Stamp points also carry an `id`, unique in the map and in the same format as element ids: a point gets a new one when it is placed, and keeps it while it is dragged or carried along by a moved room. Placing a point on another stamp's point deletes that point, id included; the new point has a new id. Points without an id (files saved before point ids) get one when the map is loaded.
 
 **Pencil strokes** are free polylines in world pixels (one grid cell = 32 px, same origin as the grid), stored flat as `[x0, y0, x1, y1, …]`; `size` is the stroke width in world pixels, so drawings scale with the map. A one-point stroke is a dot.
 
@@ -233,7 +234,8 @@ Mouse: scroll to zoom, middle-drag to pan.
 `area.region` is an `ENSRegionList` enum name picked from `mvmap-types.js`; it is set from any room's inspector and applies to the whole area.
 `area.letter` is that region's letter, written on export only. `room.number` is a positive integer, unique within its area; the room's code is the letter plus the number padded to two digits (`B01`).
 Export always writes all three, with `null` when unset; older files without them load fine. Duplicate numbers in an area, or unknown regions, are reported when a map is imported or opened from the library, and again on export.
-`typeId` on structures, edge structures and stamps is a type id from `mvmap-types.js`, picked in the inspector's Type dropdown (only that layer's types are offered); the element's name is display only. An element with no `typeId` field gets one when a map is loaded, if its name is exactly a type's label for that layer; otherwise it is listed in red as 未分类. `typeId: null` (elements created in the editor, or 未分类 picked by hand) is never re-guessed from the name. A renamed type keeps its old ids and labels in `oldIds` / `oldLabels`: on load, a `typeId` that is an old id becomes the current id, and an untyped element named with an old label is classified too (e.g. `Wall` / 墙体 → `Landscape` / 地形). Picking a type for a new element that still has its default name (`Structure 1`, `Platform 1`, `Stamp 1`) also gives it the type's label, colour and (stamps) emoji. Export writes `typeId` only when it is a type of the element's layer, and leaves the field out otherwise.
+`typeId` on structures, edge structures and stamps is a type id from `mvmap-types.js`, picked in the inspector's Type dropdown (only that layer's types are offered); the element's name is display only. An element with no `typeId` field gets one when a map is loaded, if its name is exactly a type's label for that layer; otherwise it is listed in red as 未分类. `typeId: null` (elements created in the editor, or 未分类 picked by hand) is never re-guessed from the name. A renamed type keeps its old ids and labels in `oldIds` / `oldLabels`: on load, a `typeId` that is an old id becomes the current id, and an untyped element named with an old label is classified too (e.g. `Wall` / 墙体 → `Landscape` / 地形). Picking a type for a new element that still has its default name (`Structure 1`, `Platform 1`, `Stamp 1`) also gives it the type's label, colour and (stamps) emoji. Export writes `typeId` only when it is a type of the element's layer, and leaves the field out otherwise. Types with a `group` (钱盒 → 大 / 中 / 小, 阴阳雕像 → 阴 / 阳, 敌人 → 弱小·地面 …) are picked in two steps: the group in **Type**, then the type inside it (`subLabel`) in **Subtype**; types without a group (地形 …) keep a single dropdown. An element with only its group picked stores `typeId: null` plus `typeGroup` (the group name): it is still 未分类 — listed in red as `钱盒（未选小类）` — and export leaves out `typeId` but keeps `typeGroup`, so importing the file back restores the group. A type that was split in two or more keeps no `oldIds`, so elements of the old type open without a type and the designer picks the new one; when the new types have a group, the old id goes in `groupOldIds` instead (`MoneyBox` → 钱盒, `YinYangStatue` → 阴阳雕像, `MediumMeleeEnemy` / `EliteEnemy` → 敌人), and those elements open with that group already picked.
+`anchor` on stamps says how UE places the object: `SnapToGround` (on the ground found below the marker box) or `FloatInAir` (at the bottom of the box). It is picked in the inspector's Anchor dropdown; a new stamp, or one loaded without an `anchor`, gets its type's default (`anchor` in `mvmap-types.js`, else `SnapToGround`). Types with `anchorLocked` (the enemies: ground or flying) fix it: the dropdown is hidden and export always writes the type's anchor. Export writes `anchor` on every stamp.
 
 **Import** always assigns a fresh `id`, so importing a file can never overwrite a map already in your library. The map that was open becomes the newest undo step, so `Ctrl+Z` straight after an import brings it back.
 
@@ -271,9 +273,9 @@ src/
   ui/               panels, inspector, snap bar, pencil bar, modals
   io/               JSON import / export, PNG export
   styles/           app.css
-test/               node --test: vocabulary, UE helpers, geometry, 1.x migration
+test/               node --test: vocabulary, UE helpers, geometry, 1.x migration, stamp point ids, two-level type picker
 docs/2.0-design.md  2.0 design decisions
-export_mvmap_stamp_icons.py   renders the manual types' emoji as UE placeholder icons (reads the stamp font from src/)
+export_mvmap_stamp_icons.py   renders the emoji of every stamp type and of manual structure / edge types as UE placeholder icons (reads the stamp font from src/)
 ```
 
 ---

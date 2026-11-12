@@ -262,7 +262,65 @@ test("chooseType on a brand-new element takes the type's name and colour, and it
   const e = UE.chooseType({ name: "Platform 2", color: "#000000" }, "edge", "Ledge", TYPES);
   assert.deepEqual(e, { name: "Ledge label", color: "#333333", typeId: "Ledge" });
   const p = UE.chooseType({ name: "Stamp 5", color: "#000000", emoji: "?", typeId: null }, "stamp", "Save", TYPES);
-  assert.deepEqual(p, { name: "Save label", color: "#444444", emoji: "S", typeId: "Save" });
+  assert.deepEqual(p, { name: "Save label", color: "#444444", emoji: "S", typeId: "Save", anchor: "SnapToGround" });
+});
+
+const ANCHOR_TYPES = [
+  { id: "Box", label: "Box", layer: "stamp", generate: "auto", color: "#111111", emoji: "B" },
+  { id: "Lamp", label: "Lamp", layer: "stamp", generate: "auto", color: "#111111", emoji: "L", anchor: "FloatInAir" },
+  { id: "Bat", label: "Bat", layer: "stamp", generate: "auto", color: "#111111", emoji: "b", anchor: "FloatInAir", anchorLocked: true },
+  { id: "Rat", label: "Rat", layer: "stamp", generate: "auto", color: "#111111", emoji: "r", anchor: "SnapToGround", anchorLocked: true },
+];
+
+test("stampAnchorOf: a locked type wins, then the element's own valid anchor, then the type's default, then SnapToGround", () => {
+  assert.equal(UE.stampAnchorOf({ typeId: "Bat", anchor: "SnapToGround" }, ANCHOR_TYPES), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Box", anchor: "FloatInAir" }, ANCHOR_TYPES), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Lamp" }, ANCHOR_TYPES), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Lamp", anchor: "Sideways" }, ANCHOR_TYPES), "FloatInAir");
+  assert.equal(UE.stampAnchorOf({ typeId: "Box" }, ANCHOR_TYPES), "SnapToGround");
+  assert.equal(UE.stampAnchorOf({ typeId: null }, ANCHOR_TYPES), "SnapToGround");
+  assert.equal(UE.isStampAnchorLocked({ typeId: "Rat" }, ANCHOR_TYPES), true);
+  assert.equal(UE.isStampAnchorLocked({ typeId: "Lamp" }, ANCHOR_TYPES), false);
+  assert.equal(UE.isStampAnchorLocked({ typeId: "Gone" }, ANCHOR_TYPES), false);
+});
+
+test("migrateStampAnchors fills a missing or unknown anchor from the type, keeps a valid one, forces locked ones, leaves the input alone", () => {
+  const doc = {
+    stamps: [
+      { id: "a", typeId: "Lamp", points: [] },
+      { id: "b", typeId: "Box", anchor: "FloatInAir", points: [] },
+      { id: "c", typeId: "Rat", anchor: "FloatInAir", points: [] },
+      { id: "d", typeId: null, anchor: "???", points: [] },
+    ],
+  };
+  const out = UE.migrateStampAnchors(doc, ANCHOR_TYPES);
+  assert.deepEqual(out.stamps.map((s) => s.anchor), ["FloatInAir", "FloatInAir", "SnapToGround", "SnapToGround"]);
+  assert.equal(doc.stamps[0].anchor, undefined);
+  assert.deepEqual(UE.migrateStampAnchors({}, ANCHOR_TYPES), {});
+});
+
+test("chooseType on stamps: locked types set their anchor; leaving a locked type resets it; otherwise the anchor is kept", () => {
+  const named = { name: "Wall box", typeId: "Box", anchor: "FloatInAir" };
+  assert.equal(UE.chooseType(named, "stamp", "Lamp", ANCHOR_TYPES).anchor, "FloatInAir", "kept: the user picked it");
+  assert.equal(UE.chooseType({ ...named, anchor: "SnapToGround" }, "stamp", "Lamp", ANCHOR_TYPES).anchor, "SnapToGround", "kept, even against the new default");
+  assert.equal(UE.chooseType(named, "stamp", "Rat", ANCHOR_TYPES).anchor, "SnapToGround", "locked type");
+  const bat = { name: "Cave bat", typeId: "Bat", anchor: "FloatInAir" };
+  assert.equal(UE.chooseType(bat, "stamp", "Box", ANCHOR_TYPES).anchor, "SnapToGround", "the locked anchor was never the user's");
+  assert.equal(UE.chooseType(bat, "stamp", "", ANCHOR_TYPES).anchor, "SnapToGround", "unclassified by hand");
+  assert.equal(UE.chooseType({ name: "Stamp 3", typeId: null, anchor: "SnapToGround" }, "stamp", "Lamp", ANCHOR_TYPES).anchor, "FloatInAir", "new element: type default");
+});
+
+test("buildExportDoc writes every stamp's effective anchor and keeps point ids", () => {
+  const doc = {
+    stamps: [
+      { id: "a", typeId: "Bat", anchor: "SnapToGround", points: [{ id: "pt_1", x: 1, y: 2 }] },
+      { id: "b", typeId: "Box", points: [] },
+    ],
+  };
+  const out = UE.buildExportDoc(doc, [], ANCHOR_TYPES);
+  assert.deepEqual(out.stamps.map((s) => s.anchor), ["FloatInAir", "SnapToGround"]);
+  assert.deepEqual(out.stamps[0].points, [{ id: "pt_1", x: 1, y: 2 }]);
+  assert.equal(doc.stamps[1].anchor, undefined, "the editor document is untouched");
 });
 
 test("chooseType changes only typeId once the element was renamed, already typed, or carries an unknown typeId", () => {

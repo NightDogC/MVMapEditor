@@ -21,7 +21,7 @@ import {
 import {
   sT, eT, createStruct, paintStructArea, eraseStructArea, dropEmptyStructs, structPieceAt,
   createEdgeStruct, addEdgeSegs, eraseEdgeBox, dropEmptyEdgeStructs, edgeSegAt,
-  createStamp, placeStamp, removeStampPoint, stampAt, keyAt, createNoteAt, deleteNote,
+  createStamp, placeStamp, moveStampPoint, stampSpotTaken, removeStampPoint, stampAt, keyAt, createNoteAt, deleteNote,
   beginStructMove, beginEdgeMove,
 } from "../state/layers.ts";
 import { penBox, erasePencil, simplify, roundPt } from "../state/pencil.ts";
@@ -596,15 +596,14 @@ function onPointerMove(e: PointerEvent): void {
     }
   } else if (d.type === "movestamp") {
     const q = snappedTL(t, d.grab);
-    const np = { x: fromT(q.x), y: fromT(q.y) };
+    const x = fromT(q.x), y = fromT(q.y);
     // never drop a stamp exactly onto another one while dragging
-    const taken = S.doc.stamps.some((s) => s.points.some((o) => o.x === np.x && o.y === np.y));
-    if (!taken) {
+    if (!stampSpotTaken(x, y)) {
       if (!d.undone) {
         pushUndo();
         d.undone = true;
       }
-      d.st.points = d.st.points.map((o: Pt) => (o === d.pt ? np : o));
+      const np = moveStampPoint(d.st, d.pt, x, y)!;
       d.pt = np;
       if (S.sel && S.sel.type === "stamp") S.sel.pt = np;
       commit();

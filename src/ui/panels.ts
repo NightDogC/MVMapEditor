@@ -7,7 +7,7 @@ import { sT, eT } from "../state/layers.ts";
 import { area } from "../geom/region.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS } from "../geom/lattice.ts";
-import { UE, ELEMENT_TYPES } from "../ue.ts";
+import { UE, ELEMENT_TYPES, type Typed } from "../ue.ts";
 import { renderInspector } from "./inspector.ts";
 import { $, esc } from "../util.ts";
 
@@ -127,10 +127,14 @@ function renderKeys(): void {
     .join("");
 }
 
-/** List row extras for an element with no usable type: a class that turns its name red, and a "未分类" tag. */
-const untyped = (it: { typeId?: string | null; name: string }, layer: ElementLayer) => !UE.elementTypeOf(it, layer, ELEMENT_TYPES);
-const untypedTag = (it: { typeId?: string | null; name: string }, layer: ElementLayer) =>
-  untyped(it, layer) ? `<span class="untyped-tag">未分类</span>` : "";
+/** List row extras for an element with no usable type: a class that turns its name red, and a "未分类" tag, or
+    "钱盒（未选小类）" when only the group of the two-level type picker is picked. */
+const untyped = (it: Typed, layer: ElementLayer) => !UE.elementTypeOf(it, layer, ELEMENT_TYPES);
+const untypedTag = (it: Typed, layer: ElementLayer) => {
+  if (!untyped(it, layer)) return "";
+  const group = UE.pendingTypeGroupOf(it, layer, ELEMENT_TYPES);
+  return `<span class="untyped-tag">${group ? `${esc(group)}（未选小类）` : "未分类"}</span>`;
+};
 
 function renderStructs(): void {
   const host = $("#struct-list");

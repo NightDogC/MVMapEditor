@@ -32,17 +32,17 @@ const EXPECTED = {
   "edge:edge_rav0bfxe5d": "MovableJumpOffPlatformEnd", // 可移动下落平台-终点
   "stamp:stamp_x3pdepqoz2": "JudgeMask", // 判官面具
   "stamp:stamp_eg93sf09st": "PlayerStart", // 出生点
-  "stamp:stamp_n8derrft9k": "WeakMeleeEnemy", // 弱小近战敌人
-  "stamp:stamp_fchrbmiwuv": "MoneyBox", // 钱盒
+  "stamp:stamp_n8derrft9k": "EnemyWeakGround", // 弱小近战敌人; WeakMeleeEnemy until 2026-11-12, migrated by oldIds
+  "stamp:stamp_fchrbmiwuv": null, // 钱盒; MoneyBox was split into three sizes on 2026-11-12, the designer picks one
   "stamp:stamp_68p6kkacbo": "Mechanism", // 机关
-  "stamp:stamp_8rf13o0y61": "WeakRangedEnemy", // 弱小远程敌人
+  "stamp:stamp_8rf13o0y61": "EnemyWeakGround", // 弱小远程敌人; WeakRangedEnemy until 2026-11-12, migrated by oldIds
   "stamp:stamp_c1ltxmjc8r": "Collectible", // 收集品
-  "stamp:stamp_mhtvocjkdf": "WeakFlyingEnemy", // 弱小飞行敌人
+  "stamp:stamp_mhtvocjkdf": "EnemyWeakFlying", // 弱小飞行敌人; WeakFlyingEnemy until 2026-11-12, migrated by oldIds
   "stamp:stamp_j6qlyweyxk": "SavePoint", // 傩公傩母像
-  "stamp:stamp_1jv47lsd5c": "EliteEnemy", // 精英怪
+  "stamp:stamp_1jv47lsd5c": null, // 精英怪; EliteEnemy has no new type since 2026-11-12 (ground or flying?), the designer picks one
   "stamp:stamp_1v066y5pnn": "Artifact", // 法器
-  "stamp:stamp_q0vtpgzrky": "MediumMeleeEnemy", // 中等近战敌人
-  "stamp:stamp_v4ca7wcnwq": "YinYangStatue", // 阴阳雕像
+  "stamp:stamp_q0vtpgzrky": null, // 中等近战敌人; MediumMeleeEnemy has no new type since 2026-11-12, the designer picks one
+  "stamp:stamp_v4ca7wcnwq": null, // 阴阳雕像; YinYangStatue was split into 阴 / 阳 on 2026-11-12, the designer picks one
   "stamp:stamp_jxlxm355jp": "BaiLing", // 白灵
 };
 
@@ -54,7 +54,7 @@ const LISTS = [
 
 /** layer:id -> the element's type after migration (null = unclassified), for every element of the document. */
 function migratedTypes(doc) {
-  const out = UE.migrateTypeIds(doc, TYPES.types);
+  const out = UE.migrateTypeIds(doc, TYPES.types, TYPES.groupOldIds);
   const got = {};
   for (const [list, layer] of LISTS) {
     for (const el of out[list] || []) {
@@ -74,8 +74,15 @@ test("nuosoul.mvmap.json: the elements it had on 2026-10-19 are still classified
   for (const key of present) assert.equal(got[key], EXPECTED[key], key);
 });
 
+test("nuosoul.mvmap.json: the split types' elements open with their group picked (groupOldIds)", { skip }, () => {
+  const doc = UE.migrateTypeIds(JSON.parse(fs.readFileSync(FILE, "utf8")), TYPES.types, TYPES.groupOldIds);
+  const groups = Object.fromEntries((doc.stamps || []).map((el) => [el.id, UE.pendingTypeGroupOf(el, "stamp", TYPES.types)]));
+  const expected = { stamp_fchrbmiwuv: "钱盒", stamp_v4ca7wcnwq: "阴阳雕像", stamp_q0vtpgzrky: "敌人", stamp_1jv47lsd5c: "敌人" };
+  for (const [id, group] of Object.entries(expected)) if (id in groups) assert.equal(groups[id], group, id);
+});
+
 test("nuosoul.mvmap.json: the export carries typeId on exactly the classified elements", { skip }, () => {
-  const doc = UE.migrateTypeIds(JSON.parse(fs.readFileSync(FILE, "utf8")), TYPES.types);
+  const doc = UE.migrateTypeIds(JSON.parse(fs.readFileSync(FILE, "utf8")), TYPES.types, TYPES.groupOldIds);
   const got = migratedTypes(doc);
   const out = UE.buildExportDoc(doc, TYPES.regions, TYPES.types);
   for (const [list, layer] of LISTS) {

@@ -1,5 +1,5 @@
 /* Inspector: edit whatever is selected. */
-import type { Room, Door, Key, Lock, Structure, EdgeStruct, Stamp, Note, ElementLayer } from "../model/types.ts";
+import type { Room, Door, Key, Lock, Structure, EdgeStruct, Stamp, StampAnchor, Note, ElementLayer } from "../model/types.ts";
 import { AREA_COLORS, LOCK_COLORS, STRUCT_COLORS, NOTE_COLORS, STAMP_EMOJI, pickEmoji } from "../model/constants.ts";
 import {
   S, requestDraw, pushUndo, commit, selExists, activeRoom, areaById, lockById, keyById, roomById, structById, edgeStructById,
@@ -12,7 +12,7 @@ import { orderScope, reorderSel } from "../state/order.ts";
 import { area, bbox } from "../geom/region.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS, fromT } from "../geom/lattice.ts";
-import { UE, REGIONS, ELEMENT_TYPES } from "../ue.ts";
+import { UE, REGIONS, ELEMENT_TYPES, type ElementType } from "../ue.ts";
 import { setTool } from "../tools/tool.ts";
 import { renderLists } from "./panels.ts";
 import { $, esc } from "../util.ts";
@@ -393,32 +393,83 @@ function inspectLock(host: HTMLElement, l: Lock): void {
   };
 }
 
-/** "Type" dropdown for structures, edge structures and stamps; only the types of `layer` are offered. */
-function typeField(it: { typeId?: string | null; name: string }, layer: ElementLayer): string {
+/** Option value of a group in the first-level Type dropdown (type ids are plain words, so they never start with it). */
+const GROUP_VALUE = "group:";
+
+/** "Type" dropdown for structures, edge structures and stamps; only the types of `layer` are offered. Types with a
+    `group` (mvmap-types.js) are picked in two steps: the group in "Type", then the type inside it in "Subtype". Until the
+    subtype is picked the element stays 未分类 (shown red, with the group's name). */
+function typeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): string {
   const cur = UE.elementTypeOf(it, layer, ELEMENT_TYPES);
-  const unknown = it.typeId != null && !cur;
+  const group = UE.typeGroupOf(it, layer, ELEMENT_TYPES);
+  const unknown = it.typeId != null && !cur && !group;
+  const entries = UE.typePickerEntries(ELEMENT_TYPES, layer);
   const hint = cur
     ? cur.generate === "auto"
       ? "UE import generates this element"
       : "UE import leaves a placeholder — placed by hand"
-    : unknown
-      ? "Not a type of this layer in mvmap-types.js — counts as 未分类"
-      : "未分类 — pick a type for the UE importer";
+    : group
+      ? `${esc(group)}（未选小类）— pick a subtype for the UE importer`
+      : unknown
+        ? "Not a type of this layer in mvmap-types.js — counts as 未分类"
+        : "未分类 — pick a type for the UE importer";
+  const hintDiv = `<div class="meta ${cur ? "" : "err"}">${hint}</div>`;
+  const typeOption = (t: ElementType, text: string) =>
+    `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(text)} · ${t.generate}</option>`;
+  const members = group ? UE.typesForLayer(ELEMENT_TYPES, layer).filter((t) => t.group === group) : [];
+  const subField = group
+    ? `<div class="fld"><label>Subtype</label><select id="i-subtype">
+      ${cur ? "" : `<option value="" selected>— 选小类 —</option>`}
+      ${members.map((t) => typeOption(t, t.subLabel || t.label)).join("")}
+    </select>${hintDiv}</div>`
+    : "";
   return `<div class="fld"><label>Type</label><select id="i-type">
-      <option value="" ${cur || unknown ? "" : "selected"}>— 未分类 —</option>
+      <option value="" ${cur || unknown || group ? "" : "selected"}>— 未分类 —</option>
       ${unknown ? `<option value="${esc(it.typeId)}" selected>unknown: ${esc(it.typeId)}</option>` : ""}
-      ${UE.typesForLayer(ELEMENT_TYPES, layer)
-        .map((t) => `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(t.label)} · ${t.generate}</option>`)
+      ${entries
+        .map((e) =>
+          e.group !== undefined
+            ? `<option value="${esc(GROUP_VALUE + e.group)}" ${group === e.group ? "selected" : ""}>${esc(e.types[0].emoji)} ${esc(e.group)} ▸</option>`
+            : typeOption(e.type, e.type.label),
+        )
         .join("")}
-    </select>
-    <div class="meta ${cur ? "" : "err"}">${hint}</div></div>`;
+    </select>${group ? "" : hintDiv}</div>${subField}`;
 }
 function bindTypeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): void {
-  $<Sl>("#i-type").onchange = (e) => {
-    const next = UE.chooseType(it, layer, (e.target as Sl).value, ELEMENT_TYPES);
-    if (next.typeId === it.typeId) return; // re-picked the current or the "unknown" entry
+  const apply = (next: Structure | EdgeStruct | Stamp) => {
+    // re-picked the current entry, the "unknown" one, or the group the element is already in
+    if (next.typeId === it.typeId && (next.typeGroup ?? null) === (it.typeGroup ?? null)) return;
     pushUndo();
+    if (next.typeGroup === undefined) delete it.typeGroup; // chooseType drops it; Object.assign alone would keep it
     Object.assign(it, next);
+    commit();
+  };
+  $<Sl>("#i-type").onchange = (e) => {
+    const v = (e.target as Sl).value;
+    apply(v.startsWith(GROUP_VALUE) ? UE.chooseTypeGroup(it, layer, v.slice(GROUP_VALUE.length), ELEMENT_TYPES) : UE.chooseType(it, layer, v, ELEMENT_TYPES));
+  };
+  const sub = q<Sl>("#i-subtype");
+  if (sub) sub.onchange = () => sub.value && apply(UE.chooseType(it, layer, sub.value, ELEMENT_TYPES));
+}
+
+const ANCHOR_LABELS: Record<StampAnchor, string> = { SnapToGround: "贴地 — on the ground below the box", FloatInAir: "悬空 — at the bottom of the box" };
+
+/** "Anchor" dropdown for a stamp: how UE places its object. Hidden when the stamp's type fixes the anchor (enemies). */
+function anchorField(st: Stamp): string {
+  if (UE.isStampAnchorLocked(st, ELEMENT_TYPES)) return "";
+  const cur = UE.stampAnchorOf(st, ELEMENT_TYPES);
+  return `<div class="fld"><label>Anchor</label><select id="i-anchor">
+      ${UE.STAMP_ANCHORS.map((a) => `<option value="${a}" ${a === cur ? "selected" : ""}>${esc(ANCHOR_LABELS[a])}</option>`).join("")}
+    </select></div>`;
+}
+function bindAnchorField(st: Stamp): void {
+  const sel = q<Sl>("#i-anchor");
+  if (!sel) return;
+  sel.onchange = () => {
+    const a = sel.value as StampAnchor;
+    if (a === st.anchor) return;
+    pushUndo();
+    st.anchor = a;
     commit();
   };
 }
@@ -583,6 +634,7 @@ function inspectStamp(host: HTMLElement, st: Stamp): void {
     <div class="insp-title"><span class="emo">${esc(st.emoji)}</span><span class="kind">Stamp</span></div>
     <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(st.name)}" placeholder="Save point, boss, chest…" /></div>
     ${typeField(st, "stamp")}
+    ${anchorField(st)}
     <div class="fld"><label>Emoji</label>
       <input type="text" id="i-emoji" value="${esc(st.emoji)}" placeholder="One emoji (Win + .)" autocomplete="off" spellcheck="false" />
       <div class="emoji-grid" style="margin-top:4px">${STAMP_EMOJI.map((e) => `<button data-emoji="${esc(e)}" class="${e === st.emoji ? "on" : ""}">${e}</button>`).join("")}</div>
@@ -591,7 +643,7 @@ function inspectStamp(host: HTMLElement, st: Stamp): void {
       <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#b8c0cc"}" /><span>Custom colour</span></div>
     </div>
     <div class="fld"><label>Notes</label><textarea id="i-notes" placeholder="What is here, when it appears…">${esc(st.notes)}</textarea></div>
-    <div class="meta">Placed ${st.points.length} time(s)${pt ? ` · this one at ${pt.x}, ${pt.y}${room ? " in " + esc(room.name) : ""}` : ""}${
+    <div class="meta">Placed ${st.points.length} time(s)${pt ? ` · this one at ${pt.x}, ${pt.y}${room ? " in " + esc(room.name) : ""} (id ${esc(pt.id)})` : ""}${
       S.activeStampId === st.id ? " · active stamp" : ""
     }</div>
     <div class="btn-row">
@@ -611,6 +663,7 @@ function inspectStamp(host: HTMLElement, st: Stamp): void {
     scheduleSave();
   };
   bindTypeField(st, "stamp");
+  bindAnchorField(st);
   // exactly one emoji: typing or pasting replaces the current one, anything else is dropped
   const emo = $<In>("#i-emoji");
   emo.addEventListener("focus", () => emo.select());
