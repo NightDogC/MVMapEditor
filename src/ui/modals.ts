@@ -102,12 +102,12 @@ const HELP = `
      the pointer. <b>Hold &amp; drag to pan</b> turns it into a pan
      button instead. The choice is remembered in this browser.</p>
   <h3>Copy &amp; paste</h3>
-  <p>Select a room, a structure or edge structure piece, or a stamp, press <b>Ctrl+C</b>, point at the map and press
+  <p>Select a room, a structure or edge structure piece, a stamp or a note, press <b>Ctrl+C</b>, point at the map and press
      <b>Ctrl+V</b>: a copy lands centred on the pointer, snapped (rooms to whole cells), and is selected so you can drag
      it on. With the pointer off the map it goes just to the right of the original. A copied piece or stamp joins the
-     structure, edge structure or stamp it came from, so it keeps the name and type; a pasted room is a new room
-     (“… copy”, without a number) and brings the structure, edge and stamp parts inside it — doors, keys and notes stay
-     behind. Like painting, a paste takes over whatever is underneath. The copy stays available after opening another
+     structure, edge structure or stamp it came from, so it keeps the name and type; a pasted note is a new note with
+     the same label, text and colour; a pasted room is a new room (“… copy”, without a number) and brings the
+     structure, edge and stamp parts and the notes inside it — doors and keys stay behind. Like painting, a paste takes over whatever is underneath. The copy stays available after opening another
      map, and <b>Ctrl+Z</b> undoes a paste.</p>
   <h3>Names &amp; order</h3>
   <p>A room's <b>Name position</b> puts its label in the centre or in one of its four corners.

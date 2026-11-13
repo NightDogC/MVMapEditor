@@ -87,7 +87,7 @@ export function bindKeyboard(): void {
       e.preventDefault();
       if (copyKey) {
         const what = copySelection();
-        flashHint(what ? `Copied ${esc(what)} · <kbd>Ctrl</kbd>+<kbd>V</kbd> pastes at the pointer` : "Select a room, structure, edge structure or stamp to copy");
+        flashHint(what ? `Copied ${esc(what)} · <kbd>Ctrl</kbd>+<kbd>V</kbd> pastes at the pointer` : "Select a room, structure, edge structure, stamp or note to copy");
       } else if (hasClipboard()) {
         pushUndo();
         const what = pasteClipboard();

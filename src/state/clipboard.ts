@@ -1,15 +1,16 @@
-/* Copy / paste of rooms, structures, edge structures and stamps.
+/* Copy / paste of rooms, structures, edge structures, stamps and notes.
 
    The clipboard lives in memory for this tab, so it survives opening another map from the library. A copied piece is
    pasted back into the set it came from (the same structure, edge structure or stamp), so it keeps its name and type;
    when that set doesn't exist in the open map (deleted, or another map) a new set with the same properties is made.
-   A copied room brings the structure, edge-structure and stamp parts that would move with it, and is pasted as a new
-   room; doors, keys and notes stay behind. */
-import type { Room, Structure, EdgeStruct, Stamp } from "../model/types.ts";
+   A note stands alone, so it is pasted as a new note with the same label, text and colour. A copied room brings the
+   structure, edge-structure and stamp parts and the notes that would move with it, and is pasted as a new room; doors
+   and keys stay behind. */
+import type { Room, Structure, EdgeStruct, Stamp, Note } from "../model/types.ts";
 import { TICKS, fromT, toT, roundTo } from "../geom/lattice.ts";
 import { translate, bbox, type TRect } from "../geom/region.ts";
 import { translateSegs, type TSeg } from "../geom/segs.ts";
-import { S, reindex, roomById, structById, edgeStructById, stampById, activeArea, type Sel } from "./store.ts";
+import { S, reindex, roomById, structById, edgeStructById, stampById, noteById, activeArea, type Sel } from "./store.ts";
 import { paintCell, dropEmptyRooms, pruneDoors, roomOwnsEdge } from "./rooms.ts";
 import {
   selPiece, roomContents, paintStructArea, addEdgeSegs, placeStamp, dropEmptyStructs, dropEmptyEdgeStructs,
@@ -29,6 +30,8 @@ interface Clip {
   structs: { props: Props<Structure>; rects: TRect[] }[];
   edges: { props: Props<EdgeStruct>; segs: TSeg[] }[];
   stamps: { props: Props<Stamp>; pts: { x: number; y: number }[] }[];
+  /** whole notes, ids dropped (a pasted note is a new one) */
+  notes: Omit<Note, "id">[];
 }
 
 let clip: Clip | null = null;
@@ -58,6 +61,7 @@ function boxOf(c: Omit<Clip, "box" | "label" | "whole">): Clip["box"] | null {
   for (const e of c.edges)
     for (const g of e.segs) b = grow(b, Math.min(g.x1, g.x2), Math.min(g.y1, g.y2), Math.max(g.x1, g.x2), Math.max(g.y1, g.y2));
   for (const s of c.stamps) for (const p of s.pts) b = grow(b, toT(p.x), toT(p.y), toT(p.x) + TICKS, toT(p.y) + TICKS);
+  for (const n of c.notes) b = grow(b, toT(n.x), toT(n.y), toT(n.x) + TICKS, toT(n.y) + TICKS);
   return b;
 }
 
@@ -65,7 +69,12 @@ function boxOf(c: Omit<Clip, "box" | "label" | "whole">): Clip["box"] | null {
 export function copySelection(): string | null {
   const sel = S.sel;
   if (!sel) return null;
-  const c: Omit<Clip, "box" | "label" | "whole"> = { structs: [], edges: [], stamps: [] };
+  const c: Omit<Clip, "box" | "label" | "whole"> = { structs: [], edges: [], stamps: [], notes: [] };
+  const noteCopy = (n: Note): Omit<Note, "id"> => {
+    const o = JSON.parse(JSON.stringify(n));
+    delete o.id;
+    return o;
+  };
   let label: string;
   if (sel.type === "room") {
     const room = roomById(sel.id);
@@ -81,6 +90,7 @@ export function copySelection(): string | null {
       byStamp.get(st)!.push({ x: p.x, y: p.y });
     }
     c.stamps = [...byStamp].map(([st, pts]) => ({ props: props(st), pts }));
+    c.notes = inside.notes.map(noteCopy);
     label = `Room “${room.name}”`;
   } else if (sel.type === "struct" || sel.type === "edge") {
     const pc = selPiece();
@@ -96,6 +106,11 @@ export function copySelection(): string | null {
     if (!pts.length) return null;
     c.stamps = [{ props: props(st), pts }];
     label = `Stamp “${st.name}”${one ? "" : ` (${pts.length} placed)`}`;
+  } else if (sel.type === "note") {
+    const n = noteById(sel.id);
+    if (!n) return null;
+    c.notes = [noteCopy(n)];
+    label = `Note “${n.name}”`;
   } else return null;
   const box = boxOf(c);
   if (!box) return null;
@@ -162,6 +177,13 @@ export function pasteClipboard(): string | null {
     for (const p of s.pts) if (placeStamp(st, fromT(toT(p.x) + dx), fromT(toT(p.y) + dy))) placed++;
     // a single pasted copy is selected on its own (unless it landed exactly on a copy of the same stamp)
     sel ??= s.pts.length === 1 && placed ? { type: "stamp", id: st.id, pt: st.points[st.points.length - 1] } : { type: "stamp", id: st.id };
+  }
+  if (c.notes.length) {
+    const pasted = c.notes.map((n): Note => ({ ...JSON.parse(JSON.stringify(n)), id: uid("note"), x: fromT(toT(n.x) + dx), y: fromT(toT(n.y) + dy) }));
+    // at most one note at any exact spot: one already there gives way, as when a room carries its notes
+    const landing = new Set(pasted.map((n) => n.x + "," + n.y));
+    S.doc.notes = S.doc.notes.filter((n) => !landing.has(n.x + "," + n.y)).concat(pasted);
+    sel ??= { type: "note", id: pasted[0].id };
   }
   dropEmptyRooms();
   dropEmptyStructs();
