@@ -312,39 +312,47 @@ export function beginEdgeMove(es: EdgeStruct, piece: TSeg[]) {
   };
 }
 
-/** Lift everything off-grid that sits on a room about to move: the parts of structures inside its cells, the parts
-    of edge structures inside it or on edges it owns, and stamps, notes and keys centred in it. Returns the function
-    that puts them down again shifted by (dx, dy) whole cells. */
-export function carryOffGrid(room: Room, owned: Set<string>, ownsEdge: (e: { o: string; x: number; y: number }) => boolean) {
+type OwnsEdge = (e: { o: string; x: number; y: number }) => boolean;
+
+/** Everything off-grid that sits on a room, without changing anything: the parts of structures inside its cells
+    (ticks), the parts of edge structures inside it or on edges it owns (ticks), and the stamp points, notes and keys
+    centred in it. */
+export function roomContents(room: Room, owned: Set<string>, ownsEdge: OwnsEdge) {
   const roomRegion = normalize(room.cells.map(unck).map(([x, y]) => ({ x: x * TICKS, y: y * TICKS, w: TICKS, h: TICKS })));
   const inRoom = (x: number, y: number) => owned.has(ck(...markerCell(x, y)));
-
-  const structs: [Structure, TRect[]][] = [];
-  for (const st of S.doc.structures) {
-    const m = intersect(sT(st), roomRegion);
-    if (isEmpty(m)) continue;
-    setStructT(st, subtract(sT(st), roomRegion));
-    structs.push([st, m]);
-  }
   const insideMid = (mx: number, my: number) => {
     const onV = mx % TICKS === 0 && my % TICKS !== 0, onH = my % TICKS === 0 && mx % TICKS !== 0;
     if (onV) return ownsEdge({ o: "v", x: mx / TICKS, y: Math.floor(my / TICKS) });
     if (onH) return ownsEdge({ o: "h", x: Math.floor(mx / TICKS), y: my / TICKS });
     return owned.has(ck(Math.floor(mx / TICKS), Math.floor(my / TICKS)));
   };
-  const edges: [EdgeStruct, TSeg[]][] = [];
+
+  const structs: { st: Structure; rects: TRect[]; rest: TRect[] }[] = [];
+  for (const st of S.doc.structures) {
+    const rects = intersect(sT(st), roomRegion);
+    if (!isEmpty(rects)) structs.push({ st, rects, rest: subtract(sT(st), roomRegion) });
+  }
+  const edges: { es: EdgeStruct; segs: TSeg[]; rest: TSeg[] }[] = [];
   for (const es of S.doc.edgeStructs) {
     const split = splitByCells(eT(es), TICKS, insideMid);
-    if (!split.in.length) continue;
-    setEdgeT(es, split.out);
-    edges.push([es, split.in]);
+    if (split.in.length) edges.push({ es, segs: split.in, rest: split.out });
   }
   const stamps: [Stamp, Pt][] = [];
   for (const st of S.doc.stamps)
     for (const p of st.points) if (inRoom(p.x, p.y)) stamps.push([st, p]);
-  for (const [st, p] of stamps) removeStampPoint(st, p);
   const notes = S.doc.notes.filter((n) => inRoom(n.x, n.y));
   const keys = S.doc.keys.filter((k) => inRoom(k.x, k.y));
+  return { structs, edges, stamps, notes, keys };
+}
+
+/** Lift everything off-grid that sits on a room about to move (roomContents). Returns the function that puts it
+    down again shifted by (dx, dy) whole cells. */
+export function carryOffGrid(room: Room, owned: Set<string>, ownsEdge: OwnsEdge) {
+  const lifted = roomContents(room, owned, ownsEdge);
+  const structs = lifted.structs.map(({ st, rects, rest }) => (setStructT(st, rest), [st, rects] as const));
+  const edges = lifted.edges.map(({ es, segs, rest }) => (setEdgeT(es, rest), [es, segs] as const));
+  const { stamps, notes, keys } = lifted;
+  for (const [st, p] of stamps) removeStampPoint(st, p);
 
   return (dx: number, dy: number) => {
     const DX = dx * TICKS, DY = dy * TICKS;

@@ -64,7 +64,7 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Clicking on the map selects only the connected *piece* under the pointer — dragging moves it (snapped) and `Del` deletes it — so the separate parts of one structure stay independent (pick the structure in its list to select every piece): rectangles connect along a side (corner contact doesn't count), and segments connect when they share any point. Toggle them with **Show structures** / **Show structure names**.
 
-**Stamps** — emoji markers the size of one cell, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed as often as you like, at any snapped position. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Ctrl`-click to remove; drag a placed stamp (Stamp or Select tool) to move that one copy. Two stamps can't sit at exactly the same spot — placing one there replaces the other.
+**Stamps** — emoji markers the size of one cell, drawn on top of everything: save points, items, bosses, shops. Each stamp has a name, an emoji (pick from a 64-emoji palette or type one; the field accepts exactly one emoji), a tile colour and notes, and can be placed as often as you like, at any snapped position. Click with the **Stamp** tool to place, `Shift`-click for a new stamp, `Ctrl`-click to remove; clicking a placed stamp (Stamp or Select tool) selects just that copy — only it lights up — and dragging moves it; picking the stamp in its list selects every copy. Name, emoji, colour and type belong to the stamp and are shared by its copies. Two stamps can't sit at exactly the same spot — placing one there replaces the other.
 
 **Stamp categories** — **Stamp 分类…** in the top bar opens the map's stamp groups, types and tiers (the format is under File format). Every map has its own; editing one never touches another. In the panel:
 - **+ 类型** / **+ 大类** add a type (outside any group) or a group; **+ 类型** inside a group adds a type there. New ids are generated (`Type_k3x9qa`). A new type is `manual`: the UE importer leaves a placeholder for it until the UE side knows its typeId.
@@ -87,6 +87,8 @@ Both kinds get their own list in the left rail, an inspector with name, colour (
 **Options** — the view toggles (lock ↔ key links, room names, structures, structure names, notes, pencil drawings, highlight hand-placed only), **Stamp labels above zoom** and **Right-click** live at the bottom of the right panel. Stamp names only appear once the map is zoomed in past the stamp-label zoom (60 % by default), so a zoomed-out map stays readable.
 
 **Right-click** — configurable under Options. *Remove* (default) acts like holding `Ctrl` with the current tool: erase room cells or structure area, cut edge segments, delete a door, key, note or stamp; with Select it removes the smallest thing under the pointer. *Hold & drag to pan* makes it a pan button instead. Stored per browser in `mvmap:rclick`.
+
+**Copy & paste** — select a room, a structure or edge-structure piece, or a stamp, `Ctrl+C`, point at the map, `Ctrl+V`. The copy lands centred on the pointer, snapped to the current step (rooms to whole cells), and is selected; with the pointer off the map it goes just to the right of the original. A copied piece or stamp joins the set it came from, keeping its name and type (a new set with the same properties is made if that one is gone, e.g. after opening another map — the clipboard stays for the tab). A pasted room is a new room named “… copy”, without a number, and brings the structure, edge-structure and stamp parts that would move with it; doors, keys and notes stay behind. Like painting, a paste takes over the cells and structure area underneath. `Ctrl+Z` undoes it.
 
 **Names & order** — a room's **Name position** puts its label in the centre or in one of four corners (anchored to a cell the room owns, so L-shapes keep it inside). Every inspector has a **Show name on map** toggle (on by default) and **Order** buttons that move the selection up or down its list; rooms reorder within their area. Lists draw in order, so later entries paint over earlier ones.
 
@@ -129,6 +131,7 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `F` | Zoom to fit |
 | `Enter` | Expand / collapse selected note |
 | `Del` | Delete selection |
+| `Ctrl+C` / `Ctrl+V` | Copy selection / paste at the pointer |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+S` | Export JSON |
 | `Esc` | Deselect |

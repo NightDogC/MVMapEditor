@@ -22,6 +22,19 @@ export const HINTS: Record<Tool, string> = {
   edge: `Drag a segment, any angle · <kbd>Shift</kbd> while dragging locks 45° · <kbd>Shift</kbd> at the start begins a new one · <kbd>Ctrl</kbd> erases · ${SNAP}`,
 };
 
+/** Show a short message in the hint bar, then put the tool's hint back. */
+let flashTimer: ReturnType<typeof setTimeout> | undefined;
+export function flashHint(html: string): void {
+  const el = $("#hint");
+  el.innerHTML = html;
+  el.classList.add("flash");
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => {
+    el.classList.remove("flash");
+    el.innerHTML = HINTS[S.tool] || "";
+  }, 1800);
+}
+
 export function setTool(t: Tool): void {
   S.tool = t;
   document.querySelectorAll<HTMLElement>("#tools .tool").forEach((b) => b.classList.toggle("on", b.dataset.tool === t));

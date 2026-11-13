@@ -65,7 +65,9 @@ const HELP = `
      bosses, shops. Like structures, each stamp has a name, colour and notes, and can be placed as often as you
      like; pick the emoji from the inspector's palette or type one — the field holds exactly one emoji. Click with the <b>Stamp</b> tool
      to place the active one (it snaps like everything else), <b>Shift</b>-click to start a new stamp, <b>Ctrl</b>-click
-     to remove one. Click a placed stamp to select it and drag to move just that copy.</p>
+     to remove one. Click a placed stamp to select just that copy (only it lights up) and drag to move it; picking the
+     stamp in its list selects every copy. Name, emoji, colour and type belong to the stamp, so they are shared by all
+     its copies.</p>
   <p>A stamp's <b>Type</b> comes from this map's stamp categories: groups (敌人 ▸), types and tiers (强弱, 大小).
      <b>Stamp 分类…</b> in the top bar edits them. Renaming never changes a stamp; deleting asks first, and the stamps
      using it stay, shown red until they are picked again. Emoji and colour changes apply to new stamps only. The id
@@ -99,6 +101,14 @@ const HELP = `
      area or edge segments, delete a door, key, note or stamp; with <b>Select</b> it removes the smallest thing under
      the pointer. <b>Hold &amp; drag to pan</b> turns it into a pan
      button instead. The choice is remembered in this browser.</p>
+  <h3>Copy &amp; paste</h3>
+  <p>Select a room, a structure or edge structure piece, or a stamp, press <b>Ctrl+C</b>, point at the map and press
+     <b>Ctrl+V</b>: a copy lands centred on the pointer, snapped (rooms to whole cells), and is selected so you can drag
+     it on. With the pointer off the map it goes just to the right of the original. A copied piece or stamp joins the
+     structure, edge structure or stamp it came from, so it keeps the name and type; a pasted room is a new room
+     (“… copy”, without a number) and brings the structure, edge and stamp parts inside it — doors, keys and notes stay
+     behind. Like painting, a paste takes over whatever is underneath. The copy stays available after opening another
+     map, and <b>Ctrl+Z</b> undoes a paste.</p>
   <h3>Names &amp; order</h3>
   <p>A room's <b>Name position</b> puts its label in the centre or in one of its four corners.
      Every inspector has <b>Show name on map</b> to hide one object's label, and <b>Order</b> buttons
@@ -134,6 +144,7 @@ const HELP = `
     <b>Del</b><span>Delete selection</span>
     <b>[ / ]</b><span>Move selection up / down its list</span>
     <b>Shift + [ / ]</b><span>Move selection to top / bottom</span>
+    <b>Ctrl + C / V</b><span>Copy selection / paste at the pointer</span>
     <b>Ctrl + Z / Y</b><span>Undo / redo</span>
     <b>Ctrl + S</b><span>Export JSON</span>
   </div>

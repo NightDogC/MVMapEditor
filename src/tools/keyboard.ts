@@ -8,7 +8,9 @@ import { exportJSON } from "../io/files.ts";
 import { modalOpen, closeModal } from "../ui/modals.ts";
 import { renderSnapBar } from "../ui/snapbar.ts";
 import { toolForKey } from "./keymap.ts";
-import { setTool } from "./tool.ts";
+import { setTool, flashHint } from "./tool.ts";
+import { copySelection, pasteClipboard, hasClipboard } from "../state/clipboard.ts";
+import { esc } from "../util.ts";
 
 function setAlt(down: boolean): void {
   if (S.altDown === down) return;
@@ -76,6 +78,22 @@ export function bindKeyboard(): void {
     if (mod && k === "s") {
       e.preventDefault();
       exportJSON();
+      return;
+    }
+    // copy / paste: by key code too, so they work on any keyboard layout
+    const copyKey = k === "c" || e.code === "KeyC", pasteKey = k === "v" || e.code === "KeyV";
+    if (mod && !e.shiftKey && !e.altKey && (copyKey || pasteKey)) {
+      if (modalOpen() || S.drag) return;
+      e.preventDefault();
+      if (copyKey) {
+        const what = copySelection();
+        flashHint(what ? `Copied ${esc(what)} · <kbd>Ctrl</kbd>+<kbd>V</kbd> pastes at the pointer` : "Select a room, structure, edge structure or stamp to copy");
+      } else if (hasClipboard()) {
+        pushUndo();
+        const what = pasteClipboard();
+        commit();
+        if (what) flashHint(`Pasted ${esc(what)}`);
+      } else flashHint("Nothing copied yet");
       return;
     }
     if (mod || e.altKey) return;

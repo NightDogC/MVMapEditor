@@ -149,11 +149,10 @@ export function createKeyAt(x: number, y: number) {
 }
 
 /** Move a room's cells, the doors it solely owns and everything off-grid sitting on it. */
-export function translateRoom(room: Room, dx: number, dy: number): void {
-  if (!dx && !dy) return;
-  const owned = new Set(room.cells);
-  // an edge rides along when it touches the room and isn't shared with a *different* room
-  const ownsEdge = (d: { o: string; x: number; y: number }) => {
+/** A cell edge belongs to a room when it touches the room and isn't shared with a *different* room: what rides along
+    when the room moves (doors, edge structures on its border) and what copying it takes. */
+export function roomOwnsEdge(room: Room, owned: Set<string> = new Set(room.cells)) {
+  return (d: { o: string; x: number; y: number }): boolean => {
     const cs = edgeCells(d);
     if (!cs.some(([x, y]) => owned.has(ck(x, y)))) return false;
     return cs.every(([x, y]) => {
@@ -161,6 +160,12 @@ export function translateRoom(room: Room, dx: number, dy: number): void {
       return !o || o === room.id;
     });
   };
+}
+
+export function translateRoom(room: Room, dx: number, dy: number): void {
+  if (!dx && !dy) return;
+  const owned = new Set(room.cells);
+  const ownsEdge = roomOwnsEdge(room, owned);
   const movingDoors: Door[] = S.doc.doors.filter(ownsEdge);
   const carry = carryOffGrid(room, owned, ownsEdge);
 

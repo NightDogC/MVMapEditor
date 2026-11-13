@@ -203,13 +203,14 @@ export function drawStamps(ctx: CanvasRenderingContext2D, V: View): void {
       const px = V.sx(p.x * CELL), py = V.sy(p.y * CELL);
       if (px > V.w || py > V.h || px + s < 0 || py + s < 0) continue;
       const pad = Math.max(1, s * 0.08);
-      const here = !!selPt && selPt.x === p.x && selPt.y === p.y;
-      ctx.fillStyle = hexA(col, isSel ? 0.5 : 0.32);
+      // picked on the map: only that copy lights up; picked in the list: every copy does
+      const lit = isSel && (!selPt || selPt.id === p.id);
+      ctx.fillStyle = hexA(col, lit ? 0.5 : 0.32);
       roundRect(ctx, px + pad, py + pad, s - pad * 2, s - pad * 2, Math.min(6, s * 0.18));
       ctx.fill();
-      if (isSel) {
-        ctx.lineWidth = here ? 2.2 : 1.4;
-        ctx.strokeStyle = here ? "#ffffff" : shade(col, 0.3);
+      if (lit) {
+        ctx.lineWidth = selPt ? 2.2 : 1.4;
+        ctx.strokeStyle = selPt ? "#ffffff" : shade(col, 0.3);
         ctx.stroke();
       }
       if (s >= 5) {

@@ -552,6 +552,10 @@ textarea {
   max-width: calc(100% - 300px); /* clear of the HUD on the left */
   text-align: center;
 }
+.hint.flash {
+  color: var(--tx);
+  border-color: var(--acc-2);
+}
 .hint kbd {
   font: 10px var(--mono);
   background: var(--bg-3);
