@@ -104,7 +104,8 @@ const HELP = `
   <h3>Copy &amp; paste</h3>
   <p>Select a room, a structure or edge structure piece, a stamp or a note, press <b>Ctrl+C</b>, point at the map and press
      <b>Ctrl+V</b>: a copy lands centred on the pointer, snapped (rooms to whole cells), and is selected so you can drag
-     it on. With the pointer off the map it goes just to the right of the original. A copied piece or stamp joins the
+     it on. If the pointer is off the map or hasn't moved since the copy (or the last paste), it goes just to the right
+     of the original instead (then of the last paste), so a paste never lands on top of what it came from. A copied piece or stamp joins the
      structure, edge structure or stamp it came from, so it keeps the name and type; a pasted note is a new note with
      the same label, text and colour; a pasted room is a new room (“… copy”, without a number) and brings the
      structure, edge and stamp parts and the notes inside it — doors and keys stay behind. Like painting, a paste takes over whatever is underneath. The copy stays available after opening another

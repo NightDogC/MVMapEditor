@@ -37,6 +37,10 @@ interface Clip {
 let clip: Clip | null = null;
 /** Top-left (ticks) of the last paste, so repeated pastes without the pointer on the map line up to the right. */
 let lastTL: { x: number; y: number } | null = null;
+/** Where the pointer was (world px) at the last copy / paste: a paste only follows the pointer once it has moved. */
+let lastPointer: { x: number; y: number } | null = null;
+const pointerMoved = () =>
+  !!S.hoverPt && (!lastPointer || Math.hypot(S.hoverPt.x - lastPointer.x, S.hoverPt.y - lastPointer.y) * S.cam.zoom > 3);
 
 const props = <T extends object>(it: T): Props<T> => {
   const o = JSON.parse(JSON.stringify(it));
@@ -116,6 +120,7 @@ export function copySelection(): string | null {
   if (!box) return null;
   clip = { ...c, label, whole: !!c.room, box };
   lastTL = null;
+  lastPointer = S.hoverPt && { ...S.hoverPt };
   return label;
 }
 
@@ -128,22 +133,26 @@ function targetSet<T extends { id: string }>(list: T[], find: (id: string) => T 
   return made;
 }
 
-/** Paste the clipboard centred on the pointer (snapped), or, when the pointer isn't on the map, one cell to the right
-    of the last paste / the original, so it never lands on top of it. Selects what was pasted. Returns what was pasted,
-    or null with nothing to paste. */
+/** Paste the clipboard centred on the pointer (snapped) once the pointer has moved since the copy / last paste.
+    Otherwise (pointer off the map, or still where it was, e.g. over the original), or when the pointer would put it
+    exactly on the original, it goes one cell to the right of the last paste / the original, so a paste never lands on
+    its source. Selects what was pasted. Returns what was pasted, or null with nothing to paste. */
 export function pasteClipboard(): string | null {
   const c = clip;
   if (!c) return null;
   const w = c.box.x1 - c.box.x0, h = c.box.y1 - c.box.y0;
   const step = c.whole ? TICKS : snapTicks();
-  let tl: { x: number; y: number };
-  if (S.hoverPt) {
-    tl = { x: roundTo(pxToT(S.hoverPt.x) - w / 2, step), y: roundTo(pxToT(S.hoverPt.y) - h / 2, step) };
-  } else {
+  let tl: { x: number; y: number } | null = null;
+  if (pointerMoved()) {
+    tl = { x: roundTo(pxToT(S.hoverPt!.x) - w / 2, step), y: roundTo(pxToT(S.hoverPt!.y) - h / 2, step) };
+    if (tl.x === c.box.x0 && tl.y === c.box.y0) tl = null;
+  }
+  if (!tl) {
     const from = lastTL || { x: c.box.x0, y: c.box.y0 };
     tl = { x: from.x + w + TICKS, y: from.y };
   }
   lastTL = tl;
+  lastPointer = S.hoverPt && { ...S.hoverPt };
   const dx = tl.x - c.box.x0, dy = tl.y - c.box.y0;
   let sel: Sel | null = null;
 
