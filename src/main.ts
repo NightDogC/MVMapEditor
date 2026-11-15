@@ -16,6 +16,7 @@ import { bindSnapBar } from "./ui/snapbar.ts";
 import { bindModals } from "./ui/modals.ts";
 import { bindFiles, loadDoc } from "./io/files.ts";
 import { renderUI } from "./ui/panels.ts";
+import { bindNoteEdit } from "./ui/noteedit.ts";
 import { $, prefs } from "./util.ts";
 
 async function boot(): Promise<void> {
@@ -26,6 +27,7 @@ async function boot(): Promise<void> {
   bindSnapBar();
   bindModals();
   bindFiles();
+  bindNoteEdit();
 
   await Store.init();
   if (Store.mode !== "idb") $("#file-note").classList.add("show");

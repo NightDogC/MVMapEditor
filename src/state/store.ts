@@ -45,6 +45,7 @@ export const S = {
   showPencil: true,
   pencil: { color: PENCIL_COLORS[1], size: PENCIL_SIZE.def, eraser: ERASER_SIZE.def } as PencilPrefs, // per browser
   hoverPt: null as { x: number; y: number } | null, // pointer position in world px
+  editingNoteId: null as string | null, // note whose details are being typed straight into its open box (ui/noteedit.ts)
   highlightManual: false, // fade everything but the elements the UE importer leaves for hand placement
   rclick: "remove" as "remove" | "pan", // right mouse button: "remove" (like Ctrl) | "pan" (hold and drag)
   stampZoom: 60, // stamp names show once the zoom is above this percentage

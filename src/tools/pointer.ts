@@ -29,6 +29,7 @@ import { snapTicks, brushTicks, pxToT, tToPx, snapPoint, snapSquare, snapBox, is
 import { dragRect, lockAngle } from "./shapes.ts";
 import { renderSnapBar } from "../ui/snapbar.ts";
 import { $, uid } from "../util.ts";
+import { startNoteEdit, finishNoteEdit } from "../ui/noteedit.ts";
 
 interface SP {
   x: number;
@@ -207,6 +208,11 @@ function toggleNote(note: { id: string; expanded: boolean }): void {
 }
 
 function onPointerDown(e: PointerEvent): void {
+  // a click anywhere on the map while a note's details are being typed just ends that edit
+  if (S.editingNoteId) {
+    finishNoteEdit();
+    return;
+  }
   if (S.altDown !== e.altKey) {
     S.altDown = e.altKey;
     renderSnapBar();
@@ -678,6 +684,12 @@ export function bindPointer(): void {
     S.hoverPt = null;
     S.hoverEdge = null;
     requestDraw();
+  });
+  // double-click an open note's box to type its details right there
+  worldCanvas.addEventListener("dblclick", (e) => {
+    const p = evPos(e);
+    const nh = noteHit(wctx, worldView(), p.x, p.y);
+    if (nh && nh.part === "box") startNoteEdit(nh.note.id);
   });
   worldCanvas.addEventListener("contextmenu", (e) => e.preventDefault());
   worldCanvas.addEventListener(

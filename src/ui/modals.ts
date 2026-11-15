@@ -77,7 +77,8 @@ const HELP = `
   <p>A <b>note</b> is a standalone annotation the size of one cell, drawn above everything else. Click with the
      <b>Note</b> tool to add one, then write its details in the Inspector. The <b>+</b>
      button on the note (or <b>Enter</b> while it's selected) expands it into a translucent text box on
-     the map; the box's <b>−</b> button collapses it again. Drag the open box anywhere — it remembers where you left
+     the map; the box's <b>−</b> button collapses it again. Double-click the open box to type its details right
+     there; click anywhere else (or press <b>Esc</b>) to finish — the whole edit is one undo step. Drag the open box anywhere — it remembers where you left
      it, even after collapsing; <b>Reset box position</b> in the Inspector puts it back. The label under the note can be hidden with
      <b>Show name on map</b>. Notes have no list of their own — <b>Ctrl</b>-click, right-click remove or
      <b>Del</b> deletes one, and <b>Show notes</b> (in <b>Options</b>) hides them all. They are separate from the notes field

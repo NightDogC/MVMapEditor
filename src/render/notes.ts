@@ -212,7 +212,9 @@ export function drawNotes(ctx: CanvasRenderingContext2D, V: View): void {
     while (title.length > 1 && ctx.measureText(title).width > maxT) title = title.slice(0, -2) + "…";
     ctx.fillText(title, b.x + b.padX, b.y + b.headH / 2 + 0.5);
     ctx.font = `12px ${FONTF}`;
-    if (b.body) {
+    if (n.id === S.editingNoteId) {
+      // the text is being typed into the editor laid over this box (ui/noteedit.ts)
+    } else if (b.body) {
       ctx.fillStyle = "#dfe5ef";
       b.body.forEach((ln, i) => ctx.fillText(ln, b.x + b.padX, b.y + b.headH + b.lh * i + b.lh / 2));
     } else {

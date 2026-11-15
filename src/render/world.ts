@@ -11,6 +11,7 @@ import { edgeMid } from "../state/rooms.ts";
 import { penBox } from "../state/pencil.ts";
 import { snapTicks, brushTicks, snapPoint, snapSquare, snapBox } from "../state/snap.ts";
 import { dragRect } from "../tools/shapes.ts";
+import { positionNoteEditor } from "../ui/noteedit.ts";
 import { $, hexA, clamp } from "../util.ts";
 
 export const worldCanvas = $<HTMLCanvasElement>("#world");
@@ -261,6 +262,7 @@ export function frame(): void {
     app.VW = w;
     app.VH = h;
     drawWorld(wctx, makeView(S.cam, w, h), {});
+    positionNoteEditor();
     $("#hud-zoom").textContent = Math.round(S.cam.zoom * 100) + "%";
   }
   requestAnimationFrame(frame);
