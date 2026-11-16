@@ -10,7 +10,7 @@ import { FONTF, roundRect } from "./common.ts";
 import { clamp, hexA, shade, unck, ck } from "../util.ts";
 
 /** Tools that place off-grid geometry; the grid shows the snap step's sub-lines while one is active. */
-const OFF_GRID_TOOLS = new Set(["spaint", "srect", "serase", "edge", "stamp", "note", "key", "select"]);
+const OFF_GRID_TOOLS = new Set(["spaint", "srect", "serase", "scut", "edge", "stamp", "note", "key", "select"]);
 
 export function drawGrid(ctx: CanvasRenderingContext2D, V: View, cellPx: number): void {
   const z = V.cam.zoom, step = cellPx * z;

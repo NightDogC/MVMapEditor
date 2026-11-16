@@ -15,6 +15,7 @@ export const HINTS: Record<Tool, string> = {
   spaint: `Drag to paint the active structure · <kbd>Ctrl</kbd> erases · <kbd>Shift</kbd> starts a new structure · ${SNAP}`,
   srect: `Drag a rectangle to fill the active structure · <kbd>Ctrl</kbd> clears it · <kbd>Shift</kbd> starts a new structure · ${SNAP}`,
   serase: `Drag to remove structure area and cut edge structures — rooms stay untouched · ${SNAP}`,
+  scut: `Click corners to outline a polygon cut out of the active structure · click the first corner (or <kbd>Enter</kbd>) to close · <kbd>Backspace</kbd> / <kbd>Ctrl</kbd>-click takes a corner back · <kbd>Esc</kbd> drops it · <kbd>Shift</kbd> locks 45° · ${SNAP}`,
   pencil: "Draw freely, off the grid — sketches and annotations only, not part of any room or structure · <kbd>Ctrl</kbd> erases",
   perase: "Drag to erase pencil strokes only — rooms, structures and everything else stay untouched",
   note: `Click to add a note · drag a note to move it · its <kbd>+</kbd> button expands it · <kbd>Ctrl</kbd>-click removes · ${SNAP}`,
@@ -37,6 +38,7 @@ export function flashHint(html: string): void {
 
 export function setTool(t: Tool): void {
   S.tool = t;
+  S.cutPoly = null; // a half-drawn S-Neg polygon doesn't survive a tool change
   document.querySelectorAll<HTMLElement>("#tools .tool").forEach((b) => b.classList.toggle("on", b.dataset.tool === t));
   $("#hint").innerHTML = HINTS[t] || "";
   $("#world").style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";

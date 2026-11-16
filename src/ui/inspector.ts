@@ -7,9 +7,9 @@ import {
 } from "../state/store.ts";
 import { scheduleSave } from "../state/persist.ts";
 import { roomBBox, edgeCells, markerCell, deleteRoom, deleteDoor, deleteKey, deleteLock, createLock } from "../state/rooms.ts";
-import { sT, eT, selPiece, deleteSelPiece, deleteStruct, deleteEdgeStruct, deleteStamp, removeStampPoint, deleteNote } from "../state/layers.ts";
+import { sT, eT, cT, structArea, selPiece, deleteSelPiece, deleteStruct, deleteEdgeStruct, deleteStamp, removeStampPoint, deleteNote } from "../state/layers.ts";
 import { orderScope, reorderSel } from "../state/order.ts";
-import { area, bbox } from "../geom/region.ts";
+import { bbox } from "../geom/region.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS, fromT } from "../geom/lattice.ts";
 import { UE, REGIONS, vocabOf, type ElementType } from "../ue.ts";
@@ -507,10 +507,11 @@ function inspectLayerItem(host: HTMLElement, it: Structure | EdgeStruct, isEdge:
   } else {
     const rects = sT(it as Structure);
     const b = bbox(rects);
-    size = `area ${n2(area(rects) / (TICKS * TICKS))} · ${rects.length} rect(s)${
+    const cuts = cT(it as Structure).length;
+    size = `area ${n2(structArea(it as Structure) / (TICKS * TICKS))} · ${rects.length} rect(s)${cuts ? ` · ${cuts} cut(s)` : ""}${
       b ? ` · ${n2(fromT(b.x1 - b.x0))}×${n2(fromT(b.y1 - b.y0))} at ${fromT(b.x0)},${fromT(b.y0)}` : ""
     }`;
-    if (piece && piece.kind === "struct") pieceSize = `area ${n2(area(piece.rects) / (TICKS * TICKS))}`;
+    if (piece && piece.kind === "struct") pieceSize = `area ${n2(structArea(piece.item, piece.rects) / (TICKS * TICKS))}`;
   }
   host.innerHTML = `
     <div class="insp-title"><span class="swatch" style="background:${col}${isEdge ? ";height:4px;border-radius:2px" : ""}"></span>

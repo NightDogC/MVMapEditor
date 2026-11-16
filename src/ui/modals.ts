@@ -50,6 +50,9 @@ const HELP = `
      draw a ledge one cell wide and half a cell tall. Paint it with <b>S-Paint</b> (a step-sized square brush;
      ⅛ cell while snapping is free) or drag a box with <b>S-Rect</b>; <b>Shift</b> starts a new structure,
      <b>Ctrl</b> erases. <b>S-Erase</b> removes structure area and also cuts any edge structure it passes over.
+     <b>S-Neg</b> cuts a polygon out of the active structure — for slopes and ramps: click its corners, then the
+     first corner again (or <b>Enter</b>) to close it; <b>Backspace</b> / <b>Ctrl</b>-click takes a corner back,
+     <b>Esc</b> drops it, <b>Shift</b> locks a side to 45°. Painting over a cut fills it again.
      Structures never overlap: painting one over another takes the area away from the other. Painting never
      changes the room underneath, and moving a room carries the part of each structure inside it. Clicking with
      <b>Select</b> picks only the connected piece under the pointer — rectangles joined along a side (not just

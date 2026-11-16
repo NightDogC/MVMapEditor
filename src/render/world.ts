@@ -1,7 +1,8 @@
 /* World canvas: draw order, pencil ink, tool cursors, the render loop. */
 import { makeView, resizeCanvas, type View } from "./view.ts";
 import { drawGrid, drawRooms, drawRoomLabels, drawDoors, drawKeys, drawFlow } from "./base.ts";
-import { drawStructures, drawEdgeStructs, drawStructLabels, drawStamps, drawManualMarks, strokeSegs, drawEmoji } from "./layers.ts";
+import { drawStructures, drawEdgeStructs, drawStructLabels, drawStamps, drawManualMarks, strokeSegs, drawEmoji, tracePolys } from "./layers.ts";
+import { cutTarget } from "../tools/cut.ts";
 import { drawNotes } from "./notes.ts";
 import { MARK_FADE, roundRect, edgeThickness } from "./common.ts";
 import { CELL, STRUCT_COLORS } from "../model/constants.ts";
@@ -153,6 +154,7 @@ function drawCursor(ctx: CanvasRenderingContext2D, V: View): void {
     ctx.fill();
     return;
   }
+  if (S.tool === "scut") return drawCutPreview(ctx, V);
   if (!hp || S.tool === "select") return;
 
   // off-grid tools: show where the click would land
@@ -216,6 +218,64 @@ function drawCursor(ctx: CanvasRenderingContext2D, V: View): void {
   const room = activeRoom();
   const col = S.tool === "erase" ? "#e0555f" : room ? roomColor(room) : activeArea().color;
   dashedBox(ctx, px, py, s, s, col);
+}
+
+/** S-Neg: the polygon so far, the side to the pointer, and where the next click lands. */
+function drawCutPreview(ctx: CanvasRenderingContext2D, V: View): void {
+  const pts = S.cutPoly || [];
+  const hp = S.hoverPt;
+  const tgt = hp ? cutTarget(hp.x, hp.y) : null;
+  const red = "#e0555f";
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if (pts.length) {
+    const path = tgt && tgt.ok && !tgt.closing ? [...pts, tgt.q] : pts;
+    if (path.length >= 3) {
+      tracePolys(ctx, V, [path]);
+      ctx.fillStyle = hexA(red, 0.22);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    path.forEach((v, i) => (i ? ctx.lineTo(tsx(V, v.x), tsy(V, v.y)) : ctx.moveTo(tsx(V, v.x), tsy(V, v.y))));
+    if (tgt && tgt.closing && tgt.ok) ctx.closePath();
+    ctx.strokeStyle = red;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // the side to the pointer when the click there isn't allowed
+    if (tgt && !tgt.ok) {
+      const last = pts[pts.length - 1];
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(tsx(V, last.x), tsy(V, last.y));
+      ctx.lineTo(tsx(V, tgt.q.x), tsy(V, tgt.q.y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    pts.forEach((v, i) => {
+      ctx.beginPath();
+      ctx.arc(tsx(V, v.x), tsy(V, v.y), i === 0 ? 5 : 3, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? (tgt && tgt.closing ? "#ffffff" : red) : "#ffffff";
+      ctx.fill();
+      if (i === 0) {
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+      }
+    });
+  }
+  if (tgt && !S.spaceDown && !(tgt.closing && tgt.ok)) {
+    const x = tsx(V, tgt.q.x), y = tsy(V, tgt.q.y);
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = tgt.ok ? hexA(red, 0.9) : "rgba(140,146,160,0.8)";
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 export interface DrawOpts {

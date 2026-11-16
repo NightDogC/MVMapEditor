@@ -3,8 +3,7 @@ import type { ElementLayer } from "../model/types.ts";
 import { S, undoStack, redoStack, activeArea, roomColor, structColor, keyById } from "../state/store.ts";
 import { markerCell } from "../state/rooms.ts";
 import { roomAtCell } from "../state/store.ts";
-import { sT, eT } from "../state/layers.ts";
-import { area } from "../geom/region.ts";
+import { eT, structArea } from "../state/layers.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS } from "../geom/lattice.ts";
 import { UE, vocabOf, type Typed } from "../ue.ts";
@@ -151,7 +150,7 @@ function renderStructs(): void {
           <span class="swatch" style="background:${structColor(s)}"></span>
           <span class="nm">${esc(s.name)}${s.id === S.activeStructId && s.id !== selId ? ' <span class="sub">· active</span>' : ""}</span>
           ${statusTag(s, "structure")}
-          <span class="sub" title="Area in cells">${num(area(sT(s)) / (TICKS * TICKS))}</span>
+          <span class="sub" title="Area in cells">${num(structArea(s) / (TICKS * TICKS))}</span>
         </div>`
     )
     .join("");

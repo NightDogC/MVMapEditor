@@ -91,9 +91,19 @@ interface Element {
   typeGroup?: string | null;
   hideName?: boolean;
 }
-/** Axis-aligned rectangles, canonical (non-overlapping, see geom/region.ts); the layer is exclusive. */
+/** A polygon vertex in cell units. */
+export interface XY {
+  x: number;
+  y: number;
+}
+/** Axis-aligned rectangles, canonical (non-overlapping, see geom/region.ts); the layer is exclusive. `cuts` are
+    negative space: simple polygons taken out of the rects, so the solid area is rects minus cuts. Only cuts with a
+    slanted edge are kept (a cut along the grid is taken out of the rects themselves); each still bites into the
+    rects, but may reach past them and may overlap other cuts. Vertices run clockwise on screen (positive signed area
+    with y down). Absent when there are none. */
 export interface Structure extends Element {
   rects: Rect[];
+  cuts?: XY[][];
 }
 /** Line segments, any angle; collinear overlaps are merged within a set and exclusive across sets. */
 export interface EdgeStruct extends Element {

@@ -8,17 +8,18 @@
    and keys stay behind. */
 import type { Room, Structure, EdgeStruct, Stamp, Note } from "../model/types.ts";
 import { TICKS, fromT, toT, roundTo } from "../geom/lattice.ts";
-import { translate, bbox, type TRect } from "../geom/region.ts";
+import { translate, bbox, subtract, type TRect } from "../geom/region.ts";
+import { translatePoly, type TPoly } from "../geom/poly.ts";
 import { translateSegs, type TSeg } from "../geom/segs.ts";
 import { S, reindex, roomById, structById, edgeStructById, stampById, noteById, activeArea, type Sel } from "./store.ts";
 import { paintCell, dropEmptyRooms, pruneDoors, roomOwnsEdge } from "./rooms.ts";
 import {
-  selPiece, roomContents, paintStructArea, addEdgeSegs, placeStamp, dropEmptyStructs, dropEmptyEdgeStructs,
+  selPiece, roomContents, paintStructShape, splitCuts, sT, cT, addEdgeSegs, placeStamp, dropEmptyStructs, dropEmptyEdgeStructs,
 } from "./layers.ts";
 import { snapTicks, pxToT } from "./snap.ts";
 import { uid, unck } from "../util.ts";
 
-type Props<T> = Omit<T, "rects" | "segs" | "points" | "cells">;
+type Props<T> = Omit<T, "rects" | "cuts" | "segs" | "points" | "cells">;
 interface Clip {
   /** what was copied, for messages */
   label: string;
@@ -27,7 +28,8 @@ interface Clip {
   /** bounding box in ticks */
   box: { x0: number; y0: number; x1: number; y1: number };
   room?: { props: Props<Room>; cells: [number, number][] };
-  structs: { props: Props<Structure>; rects: TRect[] }[];
+  /** cuts: the structure's cuts that bite into these rects (clipped to them when they reach other parts) */
+  structs: { props: Props<Structure>; rects: TRect[]; cuts: TPoly[] }[];
   edges: { props: Props<EdgeStruct>; segs: TSeg[] }[];
   stamps: { props: Props<Stamp>; pts: { x: number; y: number }[] }[];
   /** whole notes, ids dropped (a pasted note is a new one) */
@@ -45,6 +47,7 @@ const pointerMoved = () =>
 const props = <T extends object>(it: T): Props<T> => {
   const o = JSON.parse(JSON.stringify(it));
   delete o.rects;
+  delete o.cuts;
   delete o.segs;
   delete o.points;
   delete o.cells;
@@ -86,7 +89,7 @@ export function copySelection(): string | null {
     const owned = new Set(room.cells);
     const inside = roomContents(room, owned, roomOwnsEdge(room, owned));
     c.room = { props: props(room), cells: room.cells.map(unck) };
-    c.structs = inside.structs.map(({ st, rects }) => ({ props: props(st), rects }));
+    c.structs = inside.structs.map(({ st, rects, cuts }) => ({ props: props(st), rects, cuts }));
     c.edges = inside.edges.map(({ es, segs }) => ({ props: props(es), segs }));
     const byStamp = new Map<Stamp, { x: number; y: number }[]>();
     for (const [st, p] of inside.stamps) {
@@ -99,7 +102,10 @@ export function copySelection(): string | null {
   } else if (sel.type === "struct" || sel.type === "edge") {
     const pc = selPiece();
     if (!pc) return null;
-    if (pc.kind === "struct") c.structs = [{ props: props(pc.item), rects: pc.rects }];
+    if (pc.kind === "struct") {
+      const cuts = splitCuts(cT(pc.item), pc.rects, subtract(sT(pc.item), pc.rects)).go;
+      c.structs = [{ props: props(pc.item), rects: pc.rects, cuts }];
+    }
     else c.edges = [{ props: props(pc.item), segs: pc.segs }];
     label = `${pc.kind === "struct" ? "Structure" : "Edge structure"} “${pc.item.name}”${pc.whole ? "" : " (one piece)"}`;
   } else if (sel.type === "stamp") {
@@ -169,7 +175,7 @@ export function pasteClipboard(): string | null {
   for (const s of c.structs) {
     const st = targetSet(S.doc.structures, structById, s.props, { rects: [] } as Partial<Structure>, "struct");
     const rects = translate(s.rects, dx, dy);
-    paintStructArea(st, rects);
+    paintStructShape(st, rects, s.cuts.map((p) => translatePoly(p, dx, dy)));
     const r = rects[0];
     sel ??= { type: "struct", id: st.id, at: { x: r.x + r.w / 2, y: r.y + r.h / 2 } };
   }

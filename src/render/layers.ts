@@ -5,8 +5,9 @@ import { CELL } from "../model/constants.ts";
 import { TICKS } from "../geom/lattice.ts";
 import { outline, bbox, type TRect, type TLine } from "../geom/region.ts";
 import type { TSeg } from "../geom/segs.ts";
+import { solidOutline, type TPoly } from "../geom/poly.ts";
 import { S, structColor } from "../state/store.ts";
-import { sT, sPieces, eT, ePieces, selPiece } from "../state/layers.ts";
+import { sT, sPieces, cT, eT, ePieces, selPiece } from "../state/layers.ts";
 import { FONTF, roundRect, edgeThickness, hatchPattern, markOf, markAlpha, MARK_STYLE } from "./common.ts";
 import { clamp, hexA, shade } from "../util.ts";
 
@@ -30,10 +31,19 @@ function traceRects(ctx: CanvasRenderingContext2D, V: View, rects: TRect[]): voi
     ctx.rect(L, T, R - L + 0.5, B - T + 0.5);
   }
 }
-/** Outline the outer boundary of a region (canonical rects). */
-export function strokeRegion(ctx: CanvasRenderingContext2D, V: View, rects: TRect[]): void {
+/** Outline of rects minus cuts, cached per (cuts, rects) pair. */
+const solidOutlines = new WeakMap<object, WeakMap<object, TLine[]>>();
+function solidOutlineOf(rects: TRect[], cuts: TPoly[]): TLine[] {
+  let m = solidOutlines.get(cuts);
+  if (!m) solidOutlines.set(cuts, (m = new WeakMap()));
+  let o = m.get(rects);
+  if (!o) m.set(rects, (o = solidOutline(rects, outlineOf(rects), cuts).map(([a, b]) => ({ x1: a.x, y1: a.y, x2: b.x, y2: b.y }))));
+  return o;
+}
+/** Outline the boundary of a region (canonical rects), minus the structure's cuts when it has any. */
+export function strokeRegion(ctx: CanvasRenderingContext2D, V: View, rects: TRect[], cuts: TPoly[] = []): void {
   ctx.beginPath();
-  for (const l of outlineOf(rects)) {
+  for (const l of cuts.length ? solidOutlineOf(rects, cuts) : outlineOf(rects)) {
     const ax = sx(V, l.x1), ay = sy(V, l.y1), bx = sx(V, l.x2), by = sy(V, l.y2);
     if (Math.max(ax, bx) < 0 || Math.max(ay, by) < 0 || Math.min(ax, bx) > V.w || Math.min(ay, by) > V.h) continue;
     ctx.moveTo(ax, ay);
@@ -41,6 +51,31 @@ export function strokeRegion(ctx: CanvasRenderingContext2D, V: View, rects: TRec
   }
   ctx.stroke();
 }
+/** Path of polygons (ticks). */
+export function tracePolys(ctx: CanvasRenderingContext2D, V: View, polys: readonly TPoly[]): void {
+  ctx.beginPath();
+  for (const p of polys) {
+    p.forEach((v, i) => (i ? ctx.lineTo(sx(V, v.x), sy(V, v.y)) : ctx.moveTo(sx(V, v.x), sy(V, v.y))));
+    ctx.closePath();
+  }
+}
+/* A structure with cuts is filled on a scratch canvas, which then has the cuts wiped out of it in one go and is laid
+   onto the map: wiping (rather than clipping) leaves no hairline where two cuts meet. Its outline is worked out
+   geometrically (geom/poly.ts solidOutline) and stroked on the map. */
+let scratch: HTMLCanvasElement | null = null;
+function scratchFor(ctx: CanvasRenderingContext2D): CanvasRenderingContext2D {
+  const c = (scratch ??= document.createElement("canvas"));
+  if (c.width !== ctx.canvas.width || c.height !== ctx.canvas.height) {
+    c.width = ctx.canvas.width;
+    c.height = ctx.canvas.height;
+  }
+  const g = c.getContext("2d")!;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.clearRect(0, 0, c.width, c.height);
+  g.setTransform(ctx.getTransform());
+  return g;
+}
+
 export function strokeSegs(ctx: CanvasRenderingContext2D, V: View, segs: TSeg[]): void {
   ctx.beginPath();
   for (const s of segs) {
@@ -56,40 +91,61 @@ export function drawStructures(ctx: CanvasRenderingContext2D, V: View): void {
   const s = CELL * V.cam.zoom;
   const pc = S.sel && S.sel.type === "struct" ? selPiece() : null;
   const lit = pc && pc.kind === "struct" ? pc : null;
-  const hatch = hatchPattern(ctx);
-  if (hatch && hatch.setTransform && typeof DOMMatrix !== "undefined") {
-    // anchor the hatch to the world so it doesn't swim while panning
-    try {
-      hatch.setTransform(new DOMMatrix().translate(V.sx(0), V.sy(0)));
-    } catch {
-      /* old browsers */
+  const hatchOf = (g: CanvasRenderingContext2D) => {
+    const hatch = hatchPattern(g);
+    if (hatch && hatch.setTransform && typeof DOMMatrix !== "undefined") {
+      // anchor the hatch to the world so it doesn't swim while panning
+      try {
+        hatch.setTransform(new DOMMatrix().translate(V.sx(0), V.sy(0)));
+      } catch {
+        /* old browsers */
+      }
     }
-  }
+    return hatch;
+  };
   for (const st of S.doc.structures) {
     if (!st.rects.length) continue;
-    ctx.globalAlpha = markAlpha(st, "structure");
+    const alpha = markAlpha(st, "structure");
+    const cuts = cT(st);
+    const g = cuts.length ? scratchFor(ctx) : ctx;
+    g.globalAlpha = cuts.length ? 1 : alpha;
+    const hatch = hatchOf(g);
     const col = structColor(st);
     const isActive = st.id === S.activeStructId;
     const hl = lit && lit.item === st ? lit.rects : null; // the selected piece, if it's in this structure
     const all = sT(st);
     const parts: [TRect[], boolean][] = hl ? [[all.filter((r) => !hl.includes(r)), false], [hl, true]] : [[all, false]];
     for (const [rects, on] of parts) {
-      traceRects(ctx, V, rects);
-      ctx.fillStyle = hexA(col, on ? 0.8 : 0.6);
-      ctx.fill();
+      traceRects(g, V, rects);
+      g.fillStyle = hexA(col, on ? 0.8 : 0.6);
+      g.fill();
       if (hatch && s >= 6) {
-        ctx.fillStyle = hatch;
-        ctx.fill();
+        g.fillStyle = hatch;
+        g.fill();
       }
     }
+    if (cuts.length) {
+      g.globalCompositeOperation = "destination-out";
+      tracePolys(g, V, cuts);
+      g.fillStyle = "#000";
+      g.fill();
+      g.globalCompositeOperation = "source-over";
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(g.canvas, 0, 0);
+      ctx.restore();
+      ctx.globalAlpha = alpha;
+    }
     ctx.lineCap = "square";
+    ctx.lineJoin = "round";
     ctx.strokeStyle = shade(col, 0.22);
     ctx.lineWidth = isActive || hl ? 1.8 : 1.2;
-    strokeRegion(ctx, V, all);
+    strokeRegion(ctx, V, all, cuts);
     if (hl) {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 2.2;
-      strokeRegion(ctx, V, hl);
+      strokeRegion(ctx, V, hl, cuts);
     }
   }
   ctx.globalAlpha = 1;
@@ -306,7 +362,7 @@ export function drawManualMarks(ctx: CanvasRenderingContext2D, V: View): void {
     for (const [col, w] of [["rgba(8,10,14,0.85)", lw + 2], [style.color, lw]] as const) {
       ctx.strokeStyle = col;
       ctx.lineWidth = w;
-      if (m.layer === "structure") strokeRegion(ctx, V, sT(m.it));
+      if (m.layer === "structure") strokeRegion(ctx, V, sT(m.it), cT(m.it));
       else if (m.layer === "edge") strokeSegs(ctx, V, eT(m.it));
       else {
         const pad = Math.max(1, s * 0.08);

@@ -14,6 +14,7 @@ export const TOOL_LIST: { id: Tool; name: string }[] = [
   { id: "spaint", name: "Structure paint" },
   { id: "srect", name: "Structure rectangle" },
   { id: "serase", name: "Structure erase" },
+  { id: "scut", name: "Negative structure" },
   { id: "edge", name: "Edge structure" },
   { id: "stamp", name: "Emoji stamp" },
   { id: "note", name: "Note" },
@@ -22,7 +23,7 @@ export const TOOL_LIST: { id: Tool; name: string }[] = [
 ];
 export const DEFAULT_TOOL_KEYS: Record<Tool, string> = {
   select: "v", paint: "b", rect: "r", erase: "e", door: "d", key: "k", pan: "h",
-  spaint: "s", srect: "t", serase: "x", edge: "p", stamp: "m", note: "n", pencil: "l", perase: "q",
+  spaint: "s", srect: "t", serase: "x", scut: "g", edge: "p", stamp: "m", note: "n", pencil: "l", perase: "q",
 };
 /** Keys the map view already uses for something else; a tool can't take them. */
 export const RESERVED_KEYS: Record<string, string> = {

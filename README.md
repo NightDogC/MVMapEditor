@@ -60,6 +60,8 @@ So the interesting part of the design isn't the level geometry. It's the depende
 
 **Structures** — a second layer of named, coloured areas painted *on top of* rooms: walls, breakable or hidden walls, switches, mechanisms. A structure is a set of axis-aligned rectangles at the snap step — at `½`, a ledge one cell wide and half a cell tall is one stroke. Draw with **S-Paint** (a square brush the size of the step, `⅛` cell while snapping is free) or **S-Rect** (drag a box: from the step square under the press to the one under the pointer, or corner to corner when free); `Ctrl` erases with either. **S-Erase** removes structure area and cuts any edge structure it passes over, without touching the room beneath. Structures never overlap: painting one over another takes that area from the other. A structure can span several rooms.
 
+**Negative structure (S-Neg, `G`)** — cuts a polygon out of the *active* structure, for slopes, ramps and other shapes rectangles can't make. Click the corners one by one (they snap like edge endpoints; `Shift` locks a side to 45° steps), then click the first corner again — or press `Enter` — to close the outline; the polygon's area is taken out of the structure. `Backspace`, `Ctrl`-click or right-click takes the last corner back, `Esc` drops the polygon, and a corner that would make the outline cross or touch itself is refused. Only the active structure is cut (pick it with Select or in its list first); other structures and rooms are untouched. Parts of the polygon that run along the grid simply leave the structure's rectangles; only a polygon with a slanted side is kept as a *cut*. Painting over a cut fills it again, and cuts move, copy and paste with their piece and travel with a moved room. Areas shown in the list and the inspector leave the cuts out.
+
 **Edge structures** — named, coloured sets of line segments, drawn as thick bars: platforms, ledges, one-way floors. With the **Edge** tool, drag from one snap point to another to lay a segment at any angle; hold `Shift` while dragging to lock it to 45° steps (`Shift` held as you press starts a new edge structure). Click a segment to select it; `Ctrl`-drag erases. Segments on one line that touch or overlap merge, and an overlap with another edge structure goes to the one drawn last; crossings are allowed.
 
 Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Clicking on the map selects only the connected *piece* under the pointer — dragging moves it (snapped) and `Del` deletes it — so the separate parts of one structure stay independent (pick the structure in its list to select every piece): rectangles connect along a side (corner contact doesn't count), and segments connect when they share any point. Toggle them with **Show structures** / **Show structure names**.
@@ -115,6 +117,7 @@ The tool keys below are the defaults. Rebind any left-panel tool under **? → T
 | `S` | Structure paint |
 | `T` | Structure rectangle |
 | `X` | Structure erase |
+| `G` | Negative structure (cut a polygon out of the active structure) |
 | `P` | Edge structure (drag a segment) |
 | `M` | Emoji stamp |
 | `N` | Note |
@@ -191,7 +194,8 @@ Mouse: scroll to zoom, middle-drag to pan.
   "structures": [
     { "id": "struct_s1", "name": "Breakable Wall", "color": "#c9885a",
       "notes": "Bomb it.", "typeId": "OneWayDoor",   // UE import field, see below
-      "rects": [ { "x": 4, "y": 4, "w": 1, "h": 2 }, { "x": 5, "y": 5.5, "w": 1.5, "h": 0.5 } ] }
+      "rects": [ { "x": 4, "y": 4, "w": 1, "h": 2 }, { "x": 5, "y": 5.5, "w": 1.5, "h": 0.5 } ],
+      "cuts": [ [ { "x": 5.5, "y": 5.5 }, { "x": 6.5, "y": 5.5 }, { "x": 6.5, "y": 6 } ] ] }   // optional
   ],
 
   "stamps": [
@@ -251,6 +255,8 @@ Mouse: scroll to zoom, middle-drag to pan.
 
 **Structure rects** are axis-aligned `{ x, y, w, h }` on an independent layer: an area can be in one room *and* one structure. The layer is exclusive — no point belongs to two structures, and a structure's own rects never overlap. They are kept in a canonical form: the area is cut into horizontal bands at every rect edge, each band's maximal runs are taken, and a run is stacked onto the rect above it when that rect has exactly the same x-range. The same area always gives the same list, and each connected piece's rects are exactly the canonical form of that piece.
 
+**Structure cuts** (`cuts`, optional) are negative space: a list of simple polygons, each a list of `{ x, y }` vertices (closed implicitly, the first vertex isn't repeated), taken out of the structure's rects — the structure's solid area is its rects minus its cuts. A cut only affects its own structure. Every cut has at least one slanted side (the grid-aligned part of a polygon is taken out of the rects directly) and still covers some of the rects, but it may reach past them and may overlap or border the structure's other cuts. Vertices run clockwise on screen (positive signed area with y pointing down). Corners drawn by hand lie on the 1/96 lattice; a corner made where a cut was clipped against a rect side (by painting over it, or by moving, copying or carrying a piece) lies on that side, and its other coordinate can be any 4-decimal value. Structures without cuts have no `cuts` field. Connected pieces are still worked out from the rects alone.
+
 **Stamp points**, **keys** and **notes** are `{ x, y }`, the top-left corner of the one-cell box they occupy; the centre is `(x + 0.5, y + 0.5)`. No two stamps share exactly the same point. Stamp points also carry an `id`, unique in the map and in the same format as element ids: a point gets a new one when it is placed, and keeps it while it is dragged or carried along by a moved room. Placing a point on another stamp's point deletes that point, id included; the new point has a new id. Points without an id (files saved before point ids) get one when the map is loaded.
 
 **Pencil strokes** are free polylines in world pixels (one grid cell = 32 px, same origin as the grid), stored flat as `[x0, y0, x1, y1, …]`; `size` is the stroke width in world pixels, so drawings scale with the map. A one-point stroke is a dot.
@@ -304,7 +310,7 @@ mvmap-ue.js         pure helpers for the UE import fields (validation, room code
 src/
   model/            document types, newDoc, migrate (incl. 1.x -> 2.0), colours and emoji
   geom/             tick lattice and snap steps, rect regions (union / subtract / canonical form / pieces / outline),
-                    segments (merge / cut / pieces)
+                    segments (merge / cut / pieces), polygons for structure cuts (clipping against rects, area)
   state/            runtime state, undo, storage, snapping, room / door / key edits, off-grid layer edits, pencil
   render/           camera, grid / rooms / doors / keys, structures / edges / stamps / markers, notes, render loop
   tools/            pointer and keyboard input, tool shortcuts

@@ -1,4 +1,4 @@
-import type { MapDoc, Door, Pt } from "../model/types.ts";
+import type { MapDoc, Door, Pt, XY } from "../model/types.ts";
 import { newDoc, migrate } from "../model/doc.ts";
 import { AREA_COLORS, PENCIL_COLORS, PENCIL_SIZE, ERASER_SIZE, STRUCT_COLORS } from "../model/constants.ts";
 import { DEFAULT_SNAP } from "../geom/lattice.ts";
@@ -9,7 +9,7 @@ import { renderUI } from "../ui/panels.ts";
 
 export type Tool =
   | "select" | "paint" | "rect" | "erase" | "door" | "key" | "pan"
-  | "spaint" | "srect" | "serase" | "edge" | "stamp" | "note" | "pencil" | "perase";
+  | "spaint" | "srect" | "serase" | "scut" | "edge" | "stamp" | "note" | "pencil" | "perase";
 
 export type SelType = "room" | "door" | "key" | "lock" | "struct" | "edge" | "stamp" | "note";
 /** What's selected. On the map, structure / edge selections carry `at` (a tick point inside the piece) and mean
@@ -45,6 +45,7 @@ export const S = {
   showPencil: true,
   pencil: { color: PENCIL_COLORS[1], size: PENCIL_SIZE.def, eraser: ERASER_SIZE.def } as PencilPrefs, // per browser
   hoverPt: null as { x: number; y: number } | null, // pointer position in world px
+  cutPoly: null as XY[] | null, // corners (ticks) of the polygon being drawn with S-Neg (tools/cut.ts)
   editingNoteId: null as string | null, // note whose details are being typed straight into its open box (ui/noteedit.ts)
   highlightManual: false, // fade everything but the elements the UE importer leaves for hand placement
   rclick: "remove" as "remove" | "pan", // right mouse button: "remove" (like Ctrl) | "pan" (hold and drag)

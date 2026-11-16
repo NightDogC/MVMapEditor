@@ -30,6 +30,7 @@ import { dragRect, lockAngle } from "./shapes.ts";
 import { renderSnapBar } from "../ui/snapbar.ts";
 import { $, uid } from "../util.ts";
 import { startNoteEdit, finishNoteEdit } from "../ui/noteedit.ts";
+import { cutClick, cutTarget, setCutShift } from "./cut.ts";
 
 interface SP {
   x: number;
@@ -318,6 +319,12 @@ function onPointerDown(e: PointerEvent): void {
 
   if (rmb && S.tool === "select") return removeAt(V, p);
 
+  if (S.tool === "scut") {
+    setCutShift(shift);
+    cutClick(wx, wy, erase);
+    return;
+  }
+
   if (S.tool === "select") {
     const hit = pickAt(V, p);
     const step = snapTicks();
@@ -488,6 +495,10 @@ const snappedTL = (t: SP, grab: SP) => {
 
 function hudCoord(V: View, wx: number, wy: number, c: SP): string {
   const f = (v: number) => String(fromT(v));
+  if (S.tool === "scut") {
+    const q = cutTarget(wx, wy).q;
+    return f(q.x) + ", " + f(q.y);
+  }
   if (S.tool === "edge") {
     const q = snapPoint(wx, wy);
     return f(q.x) + ", " + f(q.y);
@@ -514,6 +525,7 @@ function onPointerMove(e: PointerEvent): void {
   const wx = V.wx(p.x), wy = V.wy(p.y);
   const c = { x: Math.floor(wx / CELL), y: Math.floor(wy / CELL) };
   const t = { x: pxToT(wx), y: pxToT(wy) };
+  if (S.tool === "scut") setCutShift(e.shiftKey);
   $("#hud-coord").textContent = hudCoord(V, wx, wy, c);
 
   const prev = S.hoverCell;

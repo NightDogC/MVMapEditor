@@ -10,6 +10,7 @@ import { renderSnapBar } from "../ui/snapbar.ts";
 import { toolForKey } from "./keymap.ts";
 import { setTool, flashHint } from "./tool.ts";
 import { copySelection, pasteClipboard, hasClipboard } from "../state/clipboard.ts";
+import { cancelCut, cutBack, finishCut, setCutShift } from "./cut.ts";
 import { esc } from "../util.ts";
 
 function setAlt(down: boolean): void {
@@ -103,6 +104,20 @@ export function bindKeyboard(): void {
       return;
     }
 
+    // a polygon half-drawn with S-Neg takes Esc, Backspace / Del and Enter
+    if (S.cutPoly) {
+      if (e.key === "Escape") return void cancelCut();
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+        return void cutBack();
+      }
+      if (e.key === "Enter") return finishCut();
+    }
+    if (e.key === "Shift" && S.tool === "scut") {
+      setCutShift(true);
+      requestDraw();
+    }
+
     const tk = toolForKey(k);
     if (tk) return setTool(tk);
     if (e.key === "f") return fitWorld();
@@ -129,6 +144,10 @@ export function bindKeyboard(): void {
   });
   window.addEventListener("keyup", (e) => {
     if (e.code === "Space") S.spaceDown = false;
+    if (e.key === "Shift") {
+      setCutShift(false);
+      requestDraw();
+    }
     if (e.key === "Alt") {
       e.preventDefault();
       setAlt(false);

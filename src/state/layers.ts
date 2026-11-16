@@ -2,9 +2,12 @@
    Geometry operations run in ticks (geom/lattice.ts); documents keep cell units. */
 import type { Structure, EdgeStruct, Stamp, Note, Room, Pt } from "../model/types.ts";
 import { STRUCT_COLORS, STAMP_EMOJI, NOTE_COLORS } from "../model/constants.ts";
-import { structT, setStructT, edgeT, setEdgeT, newPointId } from "../model/doc.ts";
+import { structT, setStructT, cutsT, setCutsT, edgeT, setEdgeT, newPointId } from "../model/doc.ts";
 import { TICKS, toT, fromT } from "../geom/lattice.ts";
 import { normalize, union, subtract, intersect, isEmpty, components, containsPoint, translate, bbox, type TRect } from "../geom/region.ts";
+import {
+  pointInPoly, polyBBox, polyArea, solidArea, translatePoly, subtractRegion, intersectRegion, overlapsRegion, coveredRegion, type TPoly,
+} from "../geom/poly.ts";
 import { normalizeSegs, subtractCollinear, eraseBox, segComponents, splitByCells, translateSegs, distToSeg2, type TSeg } from "../geom/segs.ts";
 import { S, structById, edgeStructById } from "./store.ts";
 import { markerCell } from "./rooms.ts";
@@ -14,6 +17,7 @@ import { uid, ck, unck } from "../util.ts";
 /* ── cached tick views (documents replace arrays on every change, so the array is the cache key) ── */
 const rectsT = new WeakMap<object, TRect[]>();
 const piecesT = new WeakMap<object, TRect[][]>();
+const cutsTC = new WeakMap<object, TPoly[]>();
 const segsT = new WeakMap<object, TSeg[]>();
 const segPiecesT = new WeakMap<object, TSeg[][]>();
 export function sT(st: Structure): TRect[] {
@@ -24,6 +28,13 @@ export function sT(st: Structure): TRect[] {
 export function sPieces(st: Structure): TRect[][] {
   let v = piecesT.get(st.rects);
   if (!v) piecesT.set(st.rects, (v = components(sT(st))));
+  return v;
+}
+/** A structure's cuts in ticks (none: an empty list). */
+export function cT(st: Structure): TPoly[] {
+  if (!st.cuts) return [];
+  let v = cutsTC.get(st.cuts);
+  if (!v) cutsTC.set(st.cuts, (v = cutsT(st)));
   return v;
 }
 export function eT(es: EdgeStruct): TSeg[] {
@@ -57,6 +68,7 @@ function clearStructArea(region: TRect[], keep: Structure | null): boolean {
     const rest = subtract(sT(o), region);
     if (rest.length === sT(o).length && rest.every((r, i) => sameRect(r, sT(o)[i]))) continue;
     setStructT(o, rest);
+    pruneCuts(o);
     changed = true;
   }
   return changed;
@@ -64,13 +76,70 @@ function clearStructArea(region: TRect[], keep: Structure | null): boolean {
 const sameRect = (a: TRect, b: TRect) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 const sameRects = (a: TRect[], b: TRect[]) => a.length === b.length && a.every((r, i) => sameRect(r, b[i]));
 
-/** Paint `region` into `st`; the layer is exclusive, so it leaves whichever structure had it. */
+/** Paint `region` into `st`; the layer is exclusive, so it leaves whichever structure had it. Painted area is
+    solid: the structure's cuts give way there. */
 export function paintStructArea(st: Structure, region: TRect[]): boolean {
   const changed = clearStructArea(region, st);
   const next = union(sT(st), region);
-  if (sameRects(next, sT(st))) return changed;
+  const cuts = cT(st), keptCuts = cuts.length ? subtractRegion(cuts, region) : cuts;
+  const cutsSame = keptCuts.length === cuts.length && keptCuts.every((c, i) => c === cuts[i]);
+  if (sameRects(next, sT(st)) && cutsSame) return changed;
   setStructT(st, next);
+  if (!cutsSame) setCutsT(st, keptCuts);
+  pruneCuts(st);
   return true;
+}
+/** Paint a lifted shape back (a carried or pasted piece): its rects, then the cuts that came with them. */
+export function paintStructShape(st: Structure, region: TRect[], cuts: TPoly[]): boolean {
+  const changed = paintStructArea(st, region);
+  if (!cuts.length) return changed;
+  setCutsT(st, [...cT(st), ...cuts]);
+  pruneCuts(st);
+  return true;
+}
+
+/* ── structure cuts (negative space) ─────────────────────────────── */
+/** Drop the cuts that no longer bite into the structure's area. */
+export function pruneCuts(st: Structure): void {
+  const cuts = cT(st);
+  if (!cuts.length) return;
+  const rs = sT(st);
+  const keep = cuts.filter((c) => overlapsRegion(c, rs));
+  if (keep.length !== cuts.length) setCutsT(st, keep);
+}
+/** Solid area (ticks²) of a structure, or of some of its rects: the rects minus its cuts. */
+export const structArea = (st: Structure, rects: TRect[] = sT(st)): number => solidArea(rects, cT(st));
+/** Whether the tick point falls in one of the structure's cuts. */
+export function inCut(st: Structure, x: number, y: number): boolean {
+  return cT(st).some((c) => {
+    const b = polyBBox(c);
+    return x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1 && pointInPoly(c, x, y);
+  });
+}
+/** Cut a polygon (ticks, vertices on the lattice) out of `st`. The part of it that runs along the grid comes out of
+    the rects; the polygon itself is kept as a cut only while its slanted edges still bite into what's left. */
+export function cutStruct(st: Structure, poly: TPoly): boolean {
+  const covered = coveredRegion(poly);
+  const rest = covered.length ? subtract(sT(st), covered) : sT(st);
+  const keep = overlapsRegion(poly, rest);
+  if (sameRects(rest, sT(st)) && !keep) return false;
+  setStructT(st, rest);
+  if (keep) setCutsT(st, [...cT(st), poly]);
+  pruneCuts(st);
+  return true;
+}
+/** Share a structure's cuts between `part` (rects about to be lifted: moved, carried by a room, copied) and `rest`
+    (what stays). go: the cuts for `part`, kept within it (whole when they lie inside it, else clipped to it) so that
+    put down elsewhere they can't bite into anything but `part`; stay: the cuts that still bite into `rest`. */
+export function splitCuts(cuts: TPoly[], part: TRect[], rest: TRect[]): { go: TPoly[]; stay: TPoly[] } {
+  const go: TPoly[] = [], stay: TPoly[] = [];
+  for (const c of cuts) {
+    if (overlapsRegion(c, rest)) stay.push(c);
+    if (!overlapsRegion(c, part)) continue;
+    const outside = subtractRegion([c], part).reduce((a, q) => a + polyArea(q), 0);
+    go.push(...(outside < 1e-3 ? [c] : intersectRegion(c, part)));
+  }
+  return { go, stay };
 }
 /** Remove `region` from every structure. */
 export const eraseStructArea = (region: TRect[]): boolean => clearStructArea(region, null);
@@ -91,7 +160,7 @@ export function deleteStruct(id: string): void {
 export function structPieceAt(tx: number, ty: number): { st: Structure; piece: TRect[] } | null {
   for (let i = S.doc.structures.length - 1; i >= 0; i--) {
     const st = S.doc.structures[i];
-    if (!containsPoint(sT(st), tx, ty)) continue;
+    if (!containsPoint(sT(st), tx, ty) || inCut(st, tx, ty)) continue;
     const piece = sPieces(st).find((p) => containsPoint(p, tx, ty));
     if (piece) return { st, piece };
   }
@@ -271,6 +340,7 @@ export function deleteSelPiece(): void {
   if (!pc) return;
   if (pc.kind === "struct") {
     setStructT(pc.item, subtract(sT(pc.item), pc.rects));
+    pruneCuts(pc.item);
     if (!pc.item.rects.length) deleteStruct(pc.item.id);
   } else {
     const gone = new Set(pc.segs);
@@ -283,15 +353,23 @@ export function deleteSelPiece(): void {
 /** Drag a structure piece. Every step recomputes from the layer as it was when the drag began, so passing over
     other geometry never eats it; only the final position displaces what's underneath. */
 export function beginStructMove(st: Structure, piece: TRect[]) {
-  const base = new Map(S.doc.structures.map((o) => [o, { rects: o.rects, t: sT(o) }] as const));
+  const base = new Map(S.doc.structures.map((o) => [o, { rects: o.rects, cuts: o.cuts, t: sT(o) }] as const));
   const own = subtract(sT(st), piece);
+  const { go, stay } = splitCuts(cT(st), piece, own);
   return (dx: number, dy: number) => {
     const moved = translate(piece, dx, dy);
     const mb = bbox(moved);
     for (const [o, b] of base) {
-      if (o === st) setStructT(o, union(own, moved));
-      else if (boxesMeet(bbox(b.t), mb)) setStructT(o, subtract(b.t, moved));
-      else o.rects = b.rects;
+      if (b.cuts) o.cuts = b.cuts;
+      else delete o.cuts;
+      if (o === st) {
+        setStructT(o, union(own, moved));
+        if (go.length || stay.length) setCutsT(o, [...subtractRegion(stay, moved), ...go.map((c) => translatePoly(c, dx, dy))]);
+        pruneCuts(o);
+      } else if (boxesMeet(bbox(b.t), mb)) {
+        setStructT(o, subtract(b.t, moved));
+        pruneCuts(o);
+      } else o.rects = b.rects;
     }
   };
 }
@@ -327,10 +405,14 @@ export function roomContents(room: Room, owned: Set<string>, ownsEdge: OwnsEdge)
     return owned.has(ck(Math.floor(mx / TICKS), Math.floor(my / TICKS)));
   };
 
-  const structs: { st: Structure; rects: TRect[]; rest: TRect[] }[] = [];
+  // cuts: the cuts for the room's part of the structure; stay: those for the part outside
+  const structs: { st: Structure; rects: TRect[]; rest: TRect[]; cuts: TPoly[]; stay: TPoly[] }[] = [];
   for (const st of S.doc.structures) {
     const rects = intersect(sT(st), roomRegion);
-    if (!isEmpty(rects)) structs.push({ st, rects, rest: subtract(sT(st), roomRegion) });
+    if (isEmpty(rects)) continue;
+    const rest = subtract(sT(st), roomRegion);
+    const { go, stay } = splitCuts(cT(st), rects, rest);
+    structs.push({ st, rects, rest, cuts: go, stay });
   }
   const edges: { es: EdgeStruct; segs: TSeg[]; rest: TSeg[] }[] = [];
   for (const es of S.doc.edgeStructs) {
@@ -349,14 +431,18 @@ export function roomContents(room: Room, owned: Set<string>, ownsEdge: OwnsEdge)
     down again shifted by (dx, dy) whole cells. */
 export function carryOffGrid(room: Room, owned: Set<string>, ownsEdge: OwnsEdge) {
   const lifted = roomContents(room, owned, ownsEdge);
-  const structs = lifted.structs.map(({ st, rects, rest }) => (setStructT(st, rest), [st, rects] as const));
+  const structs = lifted.structs.map(({ st, rects, rest, cuts, stay }) => {
+    setStructT(st, rest);
+    if (st.cuts) setCutsT(st, stay);
+    return [st, rects, cuts] as const;
+  });
   const edges = lifted.edges.map(({ es, segs, rest }) => (setEdgeT(es, rest), [es, segs] as const));
   const { stamps, notes, keys } = lifted;
   for (const [st, p] of stamps) removeStampPoint(st, p);
 
   return (dx: number, dy: number) => {
     const DX = dx * TICKS, DY = dy * TICKS;
-    for (const [st, m] of structs) paintStructArea(st, translate(m, DX, DY));
+    for (const [st, m, cuts] of structs) paintStructShape(st, translate(m, DX, DY), cuts.map((c) => translatePoly(c, DX, DY)));
     for (const [es, segs] of edges) addEdgeSegs(es, translateSegs(segs, DX, DY));
     for (const [st, p] of stamps) placeStamp(st, p.x + dx, p.y + dy, p.id);
     // notes ride along; one already sitting exactly at the destination gives way

@@ -1,7 +1,8 @@
 import { AREA_COLORS, NOTE_COLORS, PENCIL_COLORS, PENCIL_SIZE, STAMP_EMOJI, pickEmoji } from "./constants.ts";
-import type { MapDoc, Structure, EdgeStruct, Stamp, Rect, Seg, Pt } from "./types.ts";
+import type { MapDoc, Structure, EdgeStruct, Stamp, Rect, Seg, Pt, XY } from "./types.ts";
 import { TICKS, toT, fromT, quantize } from "../geom/lattice.ts";
 import { normalize, type TRect } from "../geom/region.ts";
+import { orient, cleanPoly, overlapsRegion, type TPoly } from "../geom/poly.ts";
 import { normalizeSegs, type TSeg } from "../geom/segs.ts";
 import { uid, unck } from "../util.ts";
 
@@ -34,6 +35,23 @@ export const segToT = (s: Seg): TSeg => ({ x1: toT(s.x1), y1: toT(s.y1), x2: toT
 export const segFromT = (s: TSeg): Seg => ({ x1: fromT(s.x1), y1: fromT(s.y1), x2: fromT(s.x2), y2: fromT(s.y2) });
 export const structT = (st: Structure): TRect[] => st.rects.map(rectToT);
 export const setStructT = (st: Structure, rs: TRect[]): void => void (st.rects = normalize(rs).map(rectFromT));
+/** Cell units -> ticks for a cut vertex: lattice values come back exact; a vertex a clip put on a rectangle's side
+    may be fractional on the other axis. */
+const cutTick = (v: number): number => {
+  const t = v * TICKS, r = Math.round(t);
+  return Math.abs(t - r) < 0.006 ? r : t;
+};
+export const cutsT = (st: Structure): TPoly[] => (st.cuts || []).map((c) => c.map((v) => ({ x: cutTick(v.x), y: cutTick(v.y) })));
+/** Store cuts (ticks) on a structure, clockwise, rounded like every other coordinate; no cuts removes the field. */
+export function setCutsT(st: Structure, polys: TPoly[]): void {
+  const out: XY[][] = [];
+  for (const p of polys) {
+    const c = cleanPoly(orient(p).map((v) => ({ x: fromT(v.x), y: fromT(v.y) })));
+    if (c && c.length >= 3) out.push(c);
+  }
+  if (out.length) st.cuts = out;
+  else delete st.cuts;
+}
 export const edgeT = (es: EdgeStruct): TSeg[] => es.segs.map(segToT);
 export const setEdgeT = (es: EdgeStruct, ss: TSeg[]): void => void (es.segs = normalizeSegs(ss).map(segFromT));
 
@@ -66,6 +84,15 @@ function cleanRects(v: unknown): Rect[] {
 function cleanSegs(v: unknown): Seg[] {
   const ss = (Array.isArray(v) ? v : []).map(asObj).filter((s) => fin(s.x1, s.y1, s.x2, s.y2));
   return normalizeSegs(ss.map((s) => segToT(s as Seg))).map(segFromT);
+}
+/** Cuts as loaded: polygons of at least 3 finite points that still bite into the structure. */
+function cleanCuts(s: Structure): void {
+  if (!Array.isArray(s.cuts)) return void delete s.cuts;
+  const polys = s.cuts
+    .filter(Array.isArray)
+    .map((c) => (c as unknown[]).map(asObj).filter((v) => fin(v.x, v.y)).map((v) => ({ x: cutTick(v.x), y: cutTick(v.y) })));
+  const rects = s.rects.map(rectToT);
+  setCutsT(s, polys.filter((p) => p.length >= 3 && overlapsRegion(p, rects)));
 }
 /** A stamp point's id as stored: kept when it is a non-empty string not used by an earlier point of the document. */
 const usablePointId = (id: unknown, used: Set<string>): id is string => typeof id === "string" && id !== "" && !used.has(id);
@@ -129,6 +156,7 @@ export function migrate(input: unknown, migrateTypes?: (d: MapDoc) => MapDoc): M
   d.structures.forEach((s: Structure & { cells?: string[] }) => {
     s.rects = Array.isArray(s.rects) ? cleanRects(s.rects) : cellsToRects(Array.isArray(s.cells) ? s.cells : []);
     delete s.cells;
+    cleanCuts(s);
     if (typeof s.notes !== "string") s.notes = "";
   });
   d.edgeStructs = Array.isArray(d.edgeStructs) ? d.edgeStructs : [];
