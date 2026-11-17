@@ -92,3 +92,29 @@ test("moving a room carries its stamp points with their ids", () => {
   assert.deepEqual(byId.get(inside.id), { id: inside.id, x: 3, y: 2 });
   assert.deepEqual(byId.get(outside.id), outside);
 });
+
+test("each copy keeps its own notes when dragged or carried by a room", () => {
+  const { a } = setup();
+  const room = { id: "r1", name: "R", areaId: S.doc.areas[0].id, color: null, notes: "", cells: ["0,0", "1,0"] };
+  S.doc.rooms.push(room);
+  placeStamp(a, 0, 0, undefined, "boss here");
+  placeStamp(a, 9, 9);
+  assert.equal(a.points[0].notes, "boss here");
+  assert.ok(!("notes" in a.points[1]), "a copy without notes has no notes field");
+  const putDown = carryOffGrid(room, new Set(room.cells), () => false);
+  putDown(3, 2);
+  const carried = a.points.find((p) => p.x === 3 && p.y === 2)!;
+  assert.equal(carried.notes, "boss here");
+  const moved = moveStampPoint(a, carried, 5, 5)!;
+  assert.equal(moved.notes, "boss here");
+  assert.equal(a.points.find((p) => p.x === 9)!.notes, undefined);
+});
+
+test("a stamp from before per-copy notes that had no copies hands its notes to its first copy", () => {
+  const { a } = setup();
+  a.notes = "old";
+  placeStamp(a, 1, 1);
+  placeStamp(a, 2, 1);
+  assert.equal(a.notes, "");
+  assert.deepEqual(a.points.map((p) => p.notes), ["old", undefined]);
+});

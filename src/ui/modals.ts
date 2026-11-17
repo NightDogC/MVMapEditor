@@ -65,12 +65,13 @@ const HELP = `
      Segments that share a point form one piece; <b>Select</b> picks, drags and deletes one piece at a time.</p>
   <h3>Stamps</h3>
   <p>A <b>stamp</b> drops an emoji marker the size of one cell, on the very top layer — save points, items,
-     bosses, shops. Like structures, each stamp has a name, colour and notes, and can be placed as often as you
+     bosses, shops. Like structures, each stamp has a name and colour, and can be placed as often as you
      like; pick the emoji from the inspector's palette or type one — the field holds exactly one emoji. Click with the <b>Stamp</b> tool
      to place the active one (it snaps like everything else), <b>Shift</b>-click to start a new stamp, <b>Ctrl</b>-click
      to remove one. Click a placed stamp to select just that copy (only it lights up) and drag to move it; picking the
      stamp in its list selects every copy. Name, emoji, colour and type belong to the stamp, so they are shared by all
-     its copies.</p>
+     its copies; <b>notes</b> belong to each copy — select a copy on the map to write its own (a copy with notes shows a
+     yellow dot in its corner).</p>
   <p>A stamp's <b>Type</b> comes from this map's stamp categories: groups (敌人 ▸), types and tiers (强弱, 大小).
      <b>Stamp 分类…</b> in the top bar edits them. Renaming never changes a stamp; deleting asks first, and the stamps
      using it stay, shown red until they are picked again. Emoji and colour changes apply to new stamps only. The id

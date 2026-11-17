@@ -144,3 +144,19 @@ test("grey-box data from older files is dropped on load", () => {
   const d = migrate({ ...v1(), detail: { r1: { sub: 8, boxes: [{ id: "b", x: 0, y: 0, w: 2, h: 2, type: "solid", label: "" }] } } });
   assert.ok(!("detail" in d));
 });
+
+test("stamp notes: kept per copy; old stamp-wide notes go to every copy without its own", () => {
+  const d = migrate({
+    stamps: [
+      { id: "s1", name: "S", color: "#fff", emoji: "⭐", notes: "shared", points: [{ id: "p1", x: 1, y: 1 }, { id: "p2", x: 2, y: 1, notes: "mine" }] },
+      { id: "s2", name: "T", color: "#fff", emoji: "⭐", notes: "", points: [{ id: "p3", x: 3, y: 1, notes: "" }, { id: "p4", x: 4, y: 1, notes: 7 }] },
+      { id: "s3", name: "U", color: "#fff", emoji: "⭐", notes: "nowhere", points: [] },
+    ],
+  });
+  const [s1, s2, s3] = d.stamps;
+  assert.equal(s1.notes, "");
+  assert.deepEqual(s1.points, [{ id: "p1", x: 1, y: 1, notes: "shared" }, { id: "p2", x: 2, y: 1, notes: "mine" }]);
+  assert.deepEqual(s2.points, [{ id: "p3", x: 3, y: 1 }, { id: "p4", x: 4, y: 1 }], "empty or non-string notes are dropped");
+  assert.equal(s3.notes, "nowhere", "a stamp with no copies keeps its notes");
+  assert.deepEqual(migrate(JSON.parse(JSON.stringify(d))), d);
+});

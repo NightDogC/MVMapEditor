@@ -1,6 +1,12 @@
-# HANDOFF：Structure 负空间（`structures[].cuts`）
+# HANDOFF：Structure 负空间（`structures[].cuts`）、Stamp 逐个实例的 Notes（`points[].notes`）
 
-> 这份文件写给负责 NSProject「NS MVMap Import」导入器的同学。导入器能读 `cuts` 以后，请删掉本文件，再向 `main` 提 Pull Request。
+> 这份文件写给负责 NSProject「NS MVMap Import」导入器的同学。导入器能读 `cuts`、也处理好了下面第二部分的 stamp notes 以后，请删掉本文件，再向 `main` 提 Pull Request。
+
+本文件有两部分：**一、Structure 负空间**；**二、Stamp 的 Notes 改为每个实例一份**。两处改动都向后兼容，文件版本仍是 `version: 2`。
+
+---
+
+# 一、Structure 负空间（`structures[].cuts`）
 
 ## 现状
 
@@ -53,13 +59,48 @@
 2. **JumpOffPlatform（EdgeStruct）、Stamp、Room、子关卡、MapVolume、门**：都不变。
 3. 用 `docs/sample-v2.mvmap.json` 和一张实际画了斜坡的地图验证：斜坡处要是空的，其余部分和原来一样。
 
-## 参考
+## 参考（第一部分）
 
 - 数据结构：[src/model/types.ts](src/model/types.ts)（`Structure.cuts`）、[src/model/doc.ts](src/model/doc.ts)（`setCutsT`、加载时的 `cleanCuts`）
 - 几何：[src/geom/poly.ts](src/geom/poly.ts)，测试在 [test/poly.test.mts](test/poly.test.mts)
 - 编辑器里的面积已经扣掉了 cut（`solidArea`），可以拿来对照导入后的体积
 
+---
+
+# 二、Stamp 的 Notes 改为每个实例一份（`stamps[].points[].notes`）
+
+## 现状
+
+- 以前 Notes 是整个 Stamp（同一个名字、emoji、类型的那一组）共用的一段文字，存在 `stamps[].notes`。
+- 现在 Notes 属于**每个放置出来的实例**，存在该点上：`stamps[].points[].notes`。在编辑器里用 Select 点中地图上的某一个实例，Inspector 里写的就是这一个实例的 Notes；有 Notes 的实例右上角会显示一个小黄点。
+- `stamps[].notes` 字段**仍然存在，但编辑器不再写入**，正常情况下恒为 `""`。
+
+```jsonc
+{ "id": "stamp_m1", "name": "Save Point", "emoji": "💾", "color": "#5aa9f0",
+  "notes": "", "typeId": "SavePoint", "anchor": "SnapToGround",
+  "points": [ { "id": "pt_a1", "x": 6, "y": 4, "notes": "Before the boss" },
+              { "id": "pt_a2", "x": 9.25, "y": 2.5 } ] }
+```
+
+## 编辑器的保证
+
+| 项 | 说明 |
+|---|---|
+| 字段 | `points[].notes` 可选，字符串。空的不写，所以**没有这个字段 = 没有 Notes** |
+| 跟随 | 拖动实例、跟随 Room 移动时 Notes 跟着走（点的 `id` 也不变）；复制粘贴出的新实例带着同样的 Notes，但 `id` 是新的 |
+| 旧文件 | 加载旧文件时，`stamps[].notes` 非空的 Stamp 会把这段文字复制给它**每个还没有自己 Notes 的点**，然后把 `stamps[].notes` 清成 `""`。所以存过一次的文件里，Notes 只出现在点上 |
+| 例外 | 一个点都没放的 Stamp 会保留旧的 `stamps[].notes`（没地方放），放下第一个点时这段文字会转到那个点上。导出文件里这种 Stamp 没有实例，可以忽略 |
+
+## 导入器需要改的地方
+
+- 如果导入器**用到了** Stamp 的 Notes（例如写进生成 Actor 的描述、Tag 或某个属性），请改为按点读取 `point.notes`（缺省视为空），写到这个点生成的那一个 Actor 上，而不是同一 Stamp 的所有 Actor 共用 `stamp.notes`。
+- 如果导入器从没读过 Notes，这一部分**无需改动**。新字段是附加的，旧导入器读新文件不会出错。
+- 示例文件 [docs/sample-v2.mvmap.json](docs/sample-v2.mvmap.json) 里 `stamp_start`（出生点）的那个点带了 `notes`，可以拿来测试。
+
+---
+
 ## 完成后
 
 1. 导入器能读 `cuts`，并用示例文件和实际地图验证通过。
-2. 删除本文件 `HANDOFF.md`，向 `main` 提 PR。
+2. 如果导入器用到了 Stamp 的 Notes，已改为按点读取 `points[].notes`。
+3. 删除本文件 `HANDOFF.md`，向 `main` 提 PR。

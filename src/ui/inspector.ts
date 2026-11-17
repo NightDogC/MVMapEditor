@@ -650,6 +650,7 @@ function inspectStamp(host: HTMLElement, st: Stamp): void {
   const selPt = S.sel && S.sel.pt;
   const pt = selPt ? st.points.find((p) => p.x === selPt.x && p.y === selPt.y) || null : null;
   const room = pt ? roomAtCell(...markerCell(pt.x, pt.y)) : null;
+  const noted = st.points.filter((p) => p.notes).length;
   host.innerHTML = `
     <div class="insp-title"><span class="emo">${esc(st.emoji)}</span><span class="kind">Stamp</span></div>
     <div class="fld"><label>Name</label><input type="text" id="i-name" value="${esc(st.name)}" placeholder="Save point, boss, chest…" /></div>
@@ -662,7 +663,13 @@ function inspectStamp(host: HTMLElement, st: Stamp): void {
     <div class="fld"><label>Tile colour</label>${colorChips(STRUCT_COLORS, st.color, "scolor")}
       <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#b8c0cc"}" /><span>Custom colour</span></div>
     </div>
-    <div class="fld"><label>Notes</label><textarea id="i-notes" placeholder="What is here, when it appears…">${esc(st.notes)}</textarea></div>
+    ${
+      pt
+        ? `<div class="fld"><label>Notes · this copy</label><textarea id="i-notes" placeholder="What is here, when it appears…">${esc(pt.notes || "")}</textarea></div>`
+        : `<div class="fld"><label>Notes</label><div class="meta">Each copy has its own notes: click a copy on the map to write them.${
+            noted ? ` ${noted} of ${st.points.length} cop${st.points.length === 1 ? "y has" : "ies have"} notes.` : ""
+          }</div></div>`
+    }
     <div class="meta">Placed ${st.points.length} time(s)${pt ? ` · this one at ${pt.x}, ${pt.y}${room ? " in " + esc(room.name) : ""} (id ${esc(pt.id)})` : ""}${
       S.activeStampId === st.id ? " · active stamp" : ""
     }</div>
@@ -678,10 +685,14 @@ function inspectStamp(host: HTMLElement, st: Stamp): void {
     renderLists();
     scheduleSave();
   };
-  $<Ta>("#i-notes").oninput = (e) => {
-    st.notes = (e.target as Ta).value;
-    scheduleSave();
-  };
+  const ta = q<Ta>("#i-notes");
+  if (ta && pt)
+    ta.oninput = () => {
+      if (ta.value) pt.notes = ta.value;
+      else delete pt.notes;
+      requestDraw();
+      scheduleSave();
+    };
   bindTypeField(st, "stamp");
   bindAnchorField(st);
   // exactly one emoji: typing or pasting replaces the current one, anything else is dropped

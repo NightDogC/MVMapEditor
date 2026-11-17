@@ -31,7 +31,8 @@ interface Clip {
   /** cuts: the structure's cuts that bite into these rects (clipped to them when they reach other parts) */
   structs: { props: Props<Structure>; rects: TRect[]; cuts: TPoly[] }[];
   edges: { props: Props<EdgeStruct>; segs: TSeg[] }[];
-  stamps: { props: Props<Stamp>; pts: { x: number; y: number }[] }[];
+  /** each copy with its own notes */
+  stamps: { props: Props<Stamp>; pts: { x: number; y: number; notes?: string }[] }[];
   /** whole notes, ids dropped (a pasted note is a new one) */
   notes: Omit<Note, "id">[];
 }
@@ -91,10 +92,10 @@ export function copySelection(): string | null {
     c.room = { props: props(room), cells: room.cells.map(unck) };
     c.structs = inside.structs.map(({ st, rects, cuts }) => ({ props: props(st), rects, cuts }));
     c.edges = inside.edges.map(({ es, segs }) => ({ props: props(es), segs }));
-    const byStamp = new Map<Stamp, { x: number; y: number }[]>();
+    const byStamp = new Map<Stamp, { x: number; y: number; notes?: string }[]>();
     for (const [st, p] of inside.stamps) {
       if (!byStamp.has(st)) byStamp.set(st, []);
-      byStamp.get(st)!.push({ x: p.x, y: p.y });
+      byStamp.get(st)!.push({ x: p.x, y: p.y, notes: p.notes });
     }
     c.stamps = [...byStamp].map(([st, pts]) => ({ props: props(st), pts }));
     c.notes = inside.notes.map(noteCopy);
@@ -112,7 +113,7 @@ export function copySelection(): string | null {
     const st = stampById(sel.id);
     if (!st) return null;
     const one = sel.pt && st.points.find((p) => p.id === sel.pt!.id);
-    const pts = (one ? [one] : st.points).map((p) => ({ x: p.x, y: p.y }));
+    const pts = (one ? [one] : st.points).map((p) => ({ x: p.x, y: p.y, notes: p.notes }));
     if (!pts.length) return null;
     c.stamps = [{ props: props(st), pts }];
     label = `Stamp “${st.name}”${one ? "" : ` (${pts.length} placed)`}`;
@@ -189,7 +190,7 @@ export function pasteClipboard(): string | null {
   for (const s of c.stamps) {
     const st = targetSet(S.doc.stamps, stampById, s.props, { points: [] } as Partial<Stamp>, "stamp");
     let placed = 0;
-    for (const p of s.pts) if (placeStamp(st, fromT(toT(p.x) + dx), fromT(toT(p.y) + dy))) placed++;
+    for (const p of s.pts) if (placeStamp(st, fromT(toT(p.x) + dx), fromT(toT(p.y) + dy), undefined, p.notes)) placed++;
     // a single pasted copy is selected on its own (unless it landed exactly on a copy of the same stamp)
     sel ??= s.pts.length === 1 && placed ? { type: "stamp", id: st.id, pt: st.points[st.points.length - 1] } : { type: "stamp", id: st.id };
   }

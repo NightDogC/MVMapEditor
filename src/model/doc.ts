@@ -110,7 +110,9 @@ function cleanPoints(v: unknown, usedIds: Set<string>): Pt[] {
     seen.add(k);
     const id = usablePointId(p.id, usedIds) ? p.id : newPointId();
     usedIds.add(id);
-    out.push({ id, x, y });
+    const q: Pt = { id, x, y };
+    if (typeof p.notes === "string" && p.notes) q.notes = p.notes;
+    out.push(q);
   }
   return out;
 }
@@ -173,6 +175,12 @@ export function migrate(input: unknown, migrateTypes?: (d: MapDoc) => MapDoc): M
       : cleanPoints((Array.isArray(s.cells) ? s.cells : []).map(unck).map(([x, y]) => ({ x, y })), pointIds);
     delete s.cells;
     if (typeof s.notes !== "string") s.notes = "";
+    // notes used to be one per stamp; they are per copy now: every copy without its own gets the old ones (a stamp
+    // with no copies keeps them, having nowhere to put them)
+    if (s.notes && s.points.length) {
+      for (const p of s.points) if (!p.notes) p.notes = s.notes;
+      s.notes = "";
+    }
     s.emoji = pickEmoji(String(s.emoji || "")) || STAMP_EMOJI[0];
   });
 

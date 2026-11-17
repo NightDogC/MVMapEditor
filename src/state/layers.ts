@@ -251,9 +251,13 @@ export function createStamp(): Stamp {
 }
 const samePt = (a: Pt, b: Pt) => a.x === b.x && a.y === b.y;
 /** Put a copy of `st` at (x, y) (cell units, top-left); a stamp already at exactly that spot gives way (that point is
-    deleted, its id with it). The new point gets a new id, or `id` when an existing point is being put back (a room move). */
-export function placeStamp(st: Stamp, x: number, y: number, id: string = newPointId()): boolean {
-  const p = { id, x, y };
+    deleted, its id with it). The new point gets a new id, or `id` when an existing point is being put back (a room move),
+    and the copy's `notes` when given (a room move, a paste). */
+export function placeStamp(st: Stamp, x: number, y: number, id: string = newPointId(), notes?: string): boolean {
+  // a stamp from before per-copy notes that had no copies kept its notes: its first copy takes them
+  if (!notes && st.notes) (notes = st.notes), (st.notes = "");
+  const p: Pt = { id, x, y };
+  if (notes) p.notes = notes;
   if (st.points.some((q) => samePt(q, p))) return false;
   for (const o of S.doc.stamps) if (o.points.some((q) => samePt(q, p))) o.points = o.points.filter((q) => !samePt(q, p));
   st.points = [...st.points, p];
@@ -265,7 +269,7 @@ export const stampSpotTaken = (x: number, y: number): boolean => S.doc.stamps.so
     included): returns the moved point, or null when the spot is taken and nothing changed. */
 export function moveStampPoint(st: Stamp, p: Pt, x: number, y: number): Pt | null {
   if (stampSpotTaken(x, y)) return null;
-  const np = { id: p.id, x, y };
+  const np = { ...p, x, y };
   st.points = st.points.map((o) => (o === p ? np : o));
   return np;
 }
@@ -444,7 +448,7 @@ export function carryOffGrid(room: Room, owned: Set<string>, ownsEdge: OwnsEdge)
     const DX = dx * TICKS, DY = dy * TICKS;
     for (const [st, m, cuts] of structs) paintStructShape(st, translate(m, DX, DY), cuts.map((c) => translatePoly(c, DX, DY)));
     for (const [es, segs] of edges) addEdgeSegs(es, translateSegs(segs, DX, DY));
-    for (const [st, p] of stamps) placeStamp(st, p.x + dx, p.y + dy, p.id);
+    for (const [st, p] of stamps) placeStamp(st, p.x + dx, p.y + dy, p.id, p.notes);
     // notes ride along; one already sitting exactly at the destination gives way
     const moving = new Set(notes);
     const landing = new Set(notes.map((n) => ck(n.x + dx, n.y + dy)));

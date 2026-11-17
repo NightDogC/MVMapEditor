@@ -273,6 +273,17 @@ export function drawStamps(ctx: CanvasRenderingContext2D, V: View): void {
         ctx.fillStyle = "#ffffff";
         drawEmoji(ctx, st.emoji, px, py, s);
       }
+      // a copy with notes of its own: a small dot in its top-right corner
+      if (p.notes && s >= 12) {
+        const r = clamp(s * 0.09, 2, 4);
+        ctx.beginPath();
+        ctx.arc(px + s - pad - r * 0.6, py + pad + r * 0.6, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#f0dc3a";
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(10,12,16,0.8)";
+        ctx.stroke();
+      }
       if (showNames && !st.hideName && st.name) labels.push({ text: st.name, col, alpha, cx: px + s / 2, top: py, bottom: py + s });
     }
   }
