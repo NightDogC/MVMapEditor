@@ -88,9 +88,6 @@ interface Element {
   /** element type: a structure / edge type from mvmap-types.js, a stamp type from the document's stampCategories;
       null = unclassified */
   typeId?: string | null;
-  /** stamps: id of a group of the stamp categories, picked without a type inside it yet. Only stored while typeId is
-      null (the group otherwise comes from the type); exported without typeId (mvmap-ue.js chooseTypeGroup) */
-  typeGroup?: string | null;
   hideName?: boolean;
 }
 /** A polygon vertex in cell units. */
@@ -121,41 +118,43 @@ export interface Stamp extends Element {
   points: Pt[];
   /** filled on load from the type's default (mvmap-ue.js stampAnchorOf); a type with anchorLocked overrides it */
   anchor?: StampAnchor;
-  /** id of a value of the tier the stamp picks from (its group's, or its type's); see mvmap-ue.js tierOf */
+  /** id of one of its type's tiers (StampType.tiers); see mvmap-ue.js tierOf */
   tier?: string | null;
 }
 
 /** Stamp categories, stored in the document and edited by designers; shape documented in mvmap-types.js
-    defaultStampCategories. Group -> type (exported as typeId) -> tier, every level optional. */
-export interface TierValue {
+    defaultStampCategories. Shaped like the UE importer's settings: types[id].tiers[tier] <-> StampTypes[id].Tiers[tier];
+    submenus only arrange the Type dropdown. */
+export interface StampTier {
+  /** stored in a stamp's `tier`; a key of the type's Tiers on the UE side */
   id: string;
   label: string;
 }
-export interface Tier {
-  /** the tier's name, the title of its dropdown (大小, 强弱) */
-  label: string;
-  values: TierValue[];
-}
-export interface StampGroup {
+export interface StampSubmenu {
   id: string;
   label: string;
-  tier?: Tier;
 }
+/** What the UE importer does with a type: generates it (auto), or leaves a placeholder to be placed by hand (manual). */
+export type ImportMethod = "auto" | "manual";
 export interface StampType {
+  /** exported as typeId; a key of StampTypes on the UE side */
   id: string;
   label: string;
-  /** id of its StampGroup */
-  group?: string;
-  generate: "auto" | "manual";
+  /** id of the StampSubmenu it is shown in (display only) */
+  submenu?: string;
   color: string;
   emoji: string;
   anchor?: StampAnchor;
   anchorLocked?: boolean;
-  /** only on a type without a group: a type in a group picks from the group's tier */
-  tier?: Tier;
+  /** the tiers' common name, the title of the tier dropdown (大小, 强弱); set exactly when `tiers` is */
+  tierLabel?: string;
+  tiers?: StampTier[];
+  /** only in mvmap-types.js defaultStampCategories and in exported files: how UE imports the type (mvmap-ue.js
+      importMethodOf); never stored in a document */
+  importMethod?: ImportMethod;
 }
 export interface StampCategories {
-  groups: StampGroup[];
+  submenus: StampSubmenu[];
   types: StampType[];
 }
 

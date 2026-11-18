@@ -126,12 +126,12 @@ test("roomCode is empty for a stored number that is not a positive integer", () 
 });
 
 const TYPES = [
-  { id: "Wall", label: "Wall label", layer: "structure", generate: "auto", color: "#111111", emoji: "W" },
-  { id: "Door", label: "Door label", layer: "structure", generate: "manual", color: "#222222", emoji: "D" },
-  { id: "Ledge", label: "Ledge label", layer: "edge", generate: "auto", color: "#333333", emoji: "L" },
+  { id: "Wall", label: "Wall label", layer: "structure", importMethod: "auto", color: "#111111", emoji: "W" },
+  { id: "Door", label: "Door label", layer: "structure", importMethod: "manual", color: "#222222", emoji: "D" },
+  { id: "Ledge", label: "Ledge label", layer: "edge", importMethod: "auto", color: "#333333", emoji: "L" },
 ];
 // stamp types live in the document's stamp categories
-const SAVE_CATEGORIES = { groups: [], types: [{ id: "Save", label: "Save label", generate: "manual", color: "#444444", emoji: "S" }] };
+const SAVE_CATEGORIES = { submenus: [], types: [{ id: "Save", label: "Save label", color: "#444444", emoji: "S" }] };
 const V = UE.vocabOf({ stampCategories: SAVE_CATEGORIES }, TYPES);
 
 test("typesForLayer lists only the types for that layer, in vocabulary order", () => {
@@ -200,8 +200,8 @@ test("migrateTypeIds leaves the input untouched and copes with documents that la
 });
 
 const RENAMED_TYPES = [
-  { id: "Landscape", label: "Landscape label", layer: "structure", generate: "auto", color: "#111111", emoji: "W", oldIds: ["Wall"], oldLabels: ["Wall label"] },
-  { id: "Ledge", label: "Ledge label", layer: "edge", generate: "auto", color: "#333333", emoji: "L" },
+  { id: "Landscape", label: "Landscape label", layer: "structure", importMethod: "auto", color: "#111111", emoji: "W", oldIds: ["Wall"], oldLabels: ["Wall label"] },
+  { id: "Ledge", label: "Ledge label", layer: "edge", importMethod: "auto", color: "#333333", emoji: "L" },
 ];
 
 test("migrateTypeIds moves a renamed type's old id to its current id, on that type's own layer only", () => {
@@ -269,12 +269,12 @@ test("chooseType on a brand-new element takes the type's name and colour, and it
 });
 
 const ANCHOR_CATEGORIES = {
-  groups: [],
+  submenus: [],
   types: [
-    { id: "Box", label: "Box", generate: "auto", color: "#111111", emoji: "B" },
-    { id: "Lamp", label: "Lamp", generate: "auto", color: "#111111", emoji: "L", anchor: "FloatInAir" },
-    { id: "Bat", label: "Bat", generate: "auto", color: "#111111", emoji: "b", anchor: "FloatInAir", anchorLocked: true },
-    { id: "Rat", label: "Rat", generate: "auto", color: "#111111", emoji: "r", anchor: "SnapToGround", anchorLocked: true },
+    { id: "Box", label: "Box", color: "#111111", emoji: "B" },
+    { id: "Lamp", label: "Lamp", color: "#111111", emoji: "L", anchor: "FloatInAir" },
+    { id: "Bat", label: "Bat", color: "#111111", emoji: "b", anchor: "FloatInAir", anchorLocked: true },
+    { id: "Rat", label: "Rat", color: "#111111", emoji: "r", anchor: "SnapToGround", anchorLocked: true },
   ],
 };
 const ANCHOR_V = UE.vocabOf({ stampCategories: ANCHOR_CATEGORIES }, []);

@@ -17,10 +17,10 @@ test("every region has a unique enum name and letter, and the letter matches its
 });
 
 const CATS = TYPES.defaultStampCategories;
-const V = UE.vocabOf({ stampCategories: CATS }, TYPES.types);
+const V = UE.vocabOf(UE.fillStampCategories({}, CATS), TYPES.types, CATS);
 const isLabel = (v) => typeof v === "string" && v.trim() === v && v !== "";
 
-test("every structure / edge type has a unique id, a known layer and generate mode, a colour and an emoji", () => {
+test("every structure / edge type has a unique id, a known layer and import method, a colour and an emoji", () => {
   const types = TYPES.types;
   assert.ok(types.length > 0);
   assert.equal(new Set(types.map((t) => t.id)).size, types.length);
@@ -28,7 +28,8 @@ test("every structure / edge type has a unique id, a known layer and generate mo
     assert.match(t.id, /^[A-Z][A-Za-z]*$/, t.id);
     assert.ok(isLabel(t.label), t.id);
     assert.ok(["structure", "edge"].includes(t.layer), `${t.id}: stamp types belong in defaultStampCategories`);
-    assert.ok(["auto", "manual"].includes(t.generate), t.id);
+    assert.ok(["auto", "manual"].includes(t.importMethod), t.id);
+    assert.equal(t.generate, undefined, `${t.id}: generate is now importMethod`);
     assert.match(t.color, /^#[0-9a-f]{6}$/i, t.id);
     assert.ok(typeof t.emoji === "string" && t.emoji !== "", t.id);
     assert.equal(t.anchor, undefined, t.id);
@@ -51,8 +52,10 @@ test("old ids never clash with a current id or another type's old id, so a renam
 });
 
 test("the importer's auto types: Landscape, DamageTerrain, JumpOffPlatform, MapConnection, and the phase-four stamps", () => {
-  const all = [...TYPES.types, ...CATS.types.map((t) => ({ ...t, layer: "stamp" }))];
-  const auto = all.filter((t) => t.generate === "auto").map((t) => `${t.layer}:${t.id}`).sort();
+  const auto = [
+    ...TYPES.types.filter((t) => UE.importMethodOf(t.id, t.layer, V) === "auto").map((t) => `${t.layer}:${t.id}`),
+    ...CATS.types.filter((t) => UE.importMethodOf(t.id, "stamp", V) === "auto").map((t) => `stamp:${t.id}`),
+  ].sort();
   assert.deepEqual(auto, [
     "edge:JumpOffPlatform", "edge:MapConnection",
     "stamp:FlyingEnemy", "stamp:MeleeEnemy", "stamp:MoneyBox", "stamp:RangedEnemy", "stamp:SavePoint", "stamp:YinYangStatue",
@@ -60,54 +63,53 @@ test("the importer's auto types: Landscape, DamageTerrain, JumpOffPlatform, MapC
   ]);
 });
 
-test("default stamp categories: readable unique ids, labels, colours, emoji; groups exist; tiers have values with unique ids", () => {
+test("default stamp categories: readable unique ids, labels, colours, emoji, an import method; submenus exist; tiers have a tier label and unique ids", () => {
   const ids = (list) => list.map((x) => x.id);
-  assert.equal(new Set(ids(CATS.groups)).size, CATS.groups.length);
+  assert.equal(new Set(ids(CATS.submenus)).size, CATS.submenus.length);
   assert.equal(new Set(ids(CATS.types)).size, CATS.types.length);
-  const tiers = [];
-  for (const g of CATS.groups) {
-    assert.match(g.id, /^[A-Z][A-Za-z]*$/, g.id);
-    assert.ok(isLabel(g.label), g.id);
-    if (g.tier) tiers.push([g.id, g.tier]);
+  for (const s of CATS.submenus) {
+    assert.match(s.id, /^[A-Z][A-Za-z]*$/, s.id);
+    assert.ok(isLabel(s.label), s.id);
+    assert.deepEqual(Object.keys(s).sort(), ["id", "label"], `${s.id}: a submenu has no tiers`);
   }
   for (const t of CATS.types) {
     assert.match(t.id, /^[A-Z][A-Za-z]*$/, t.id);
     assert.ok(isLabel(t.label), t.id);
-    assert.ok(["auto", "manual"].includes(t.generate), t.id);
+    assert.ok(["auto", "manual"].includes(t.importMethod), `${t.id}: no import method`);
     assert.match(t.color, /^#[0-9a-f]{6}$/i, t.id);
     assert.ok(typeof t.emoji === "string" && t.emoji !== "", t.id);
     assert.equal(t.layer, undefined, `${t.id}: stamp types have no layer field`);
-    if (t.group !== undefined) {
-      assert.ok(CATS.groups.some((g) => g.id === t.group), `${t.id}: no group "${t.group}"`);
-      assert.equal(t.tier, undefined, `${t.id}: a type in a group uses the group's tier`);
-    }
-    if (t.tier) tiers.push([t.id, t.tier]);
-  }
-  for (const [owner, tier] of tiers) {
-    assert.ok(isLabel(tier.label), owner);
-    assert.ok(tier.values.length > 0, `${owner}: tier without values`);
-    assert.equal(new Set(ids(tier.values)).size, tier.values.length, owner);
-    for (const v of tier.values) {
-      assert.match(v.id, /^[A-Z][A-Za-z]*$/, `${owner}: ${v.id}`);
-      assert.ok(isLabel(v.label), `${owner}: ${v.id}`);
+    if (t.submenu !== undefined) assert.ok(CATS.submenus.some((s) => s.id === t.submenu), `${t.id}: no submenu "${t.submenu}"`);
+    assert.equal(t.tiers === undefined, t.tierLabel === undefined, `${t.id}: tiers come with a tier label`);
+    if (t.tiers) {
+      assert.ok(isLabel(t.tierLabel), t.id);
+      assert.ok(t.tiers.length > 0, `${t.id}: tier label without tiers`);
+      assert.equal(new Set(ids(t.tiers)).size, t.tiers.length, t.id);
+      for (const v of t.tiers) {
+        assert.match(v.id, /^[A-Z][A-Za-z]*$/, `${t.id}: ${v.id}`);
+        assert.ok(isLabel(v.label), `${t.id}: ${v.id}`);
+      }
     }
   }
-  assert.deepEqual(UE.fillStampCategories({}, CATS).stampCategories, CATS, "already in the shape loading leaves it in");
+  const withoutImportMethod = { ...CATS, types: CATS.types.map(({ importMethod, ...t }) => t) };
+  assert.deepEqual(UE.fillStampCategories({}, CATS).stampCategories, withoutImportMethod, "a new document gets them as they are, without importMethod");
+  assert.deepEqual(UE.stampCategoryProblems({ stampCategories: CATS }), []);
 });
 
-test("default stamp categories: 钱盒 and 阴阳雕像 are one type each with a tier; 敌人 is a group of three types with 强弱", () => {
-  const tierOf = (typeId) => UE.tierOf({ typeId }, "stamp", V);
-  const values = (tier) => tier.values.map((v) => `${v.id}:${v.label}`);
-  assert.equal(tierOf("MoneyBox").label, "大小");
-  assert.deepEqual(values(tierOf("MoneyBox")), ["Small:小", "Medium:中", "Large:大"]);
-  assert.equal(tierOf("YinYangStatue").label, "阴阳");
-  assert.deepEqual(values(tierOf("YinYangStatue")), ["Yin:阴", "Yang:阳"]);
-  assert.deepEqual(UE.groupMembers(V, "stamp", "Enemy").map((t) => `${t.id}:${t.label}`), ["MeleeEnemy:近战", "RangedEnemy:远程", "FlyingEnemy:飞行"]);
+test("default stamp categories: 钱盒 and 阴阳雕像 have their own tiers; 近战 / 远程 / 飞行 are in 敌人 with a 强弱 each", () => {
+  const typeOf = (id) => V.stamp.types.find((t) => t.id === id);
+  const tiers = (id) => UE.tiersOfType(typeOf(id)).map((v) => `${v.id}:${v.label}`);
+  assert.equal(typeOf("MoneyBox").tierLabel, "大小");
+  assert.deepEqual(tiers("MoneyBox"), ["Small:小", "Medium:中", "Large:大"]);
+  assert.equal(typeOf("YinYangStatue").tierLabel, "阴阳");
+  assert.deepEqual(tiers("YinYangStatue"), ["Yin:阴", "Yang:阳"]);
   for (const id of ["MeleeEnemy", "RangedEnemy", "FlyingEnemy"]) {
-    assert.equal(tierOf(id).label, "强弱", id);
-    assert.deepEqual(values(tierOf(id)), ["Weak:弱小", "Medium:中等", "Elite:精英"], id);
+    assert.equal(UE.submenuOfType(V, typeOf(id)).label, "敌人", id);
+    assert.equal(typeOf(id).tierLabel, "强弱", id);
+    assert.deepEqual(tiers(id), ["Weak:弱小", "Medium:中等", "Elite:精英"], id);
   }
-  assert.equal(tierOf("SavePoint"), null);
+  assert.notEqual(typeOf("MeleeEnemy").tiers, typeOf("FlyingEnemy").tiers, "each type has its own list");
+  assert.equal(UE.tiersOfType(typeOf("SavePoint")), null);
 });
 
 test("anchors: enemies lock ground / flying, everything else defaults to SnapToGround", () => {
@@ -120,49 +122,51 @@ test("anchors: enemies lock ground / flying, everything else defaults to SnapToG
   for (const t of CATS.types.filter((x) => !x.anchorLocked)) assert.equal(UE.defaultStampAnchor(t), "SnapToGround", t.id);
 });
 
-test("oldStampIds: unique ids, and every target names a group, type and tier value of the default categories that fit together", () => {
+test("oldStampIds: unique ids, and every target names a type of the default categories and one of its tiers", () => {
   const olds = TYPES.oldStampIds.map((o) => o.id);
   assert.equal(new Set(olds).size, olds.length);
   for (const o of TYPES.oldStampIds) {
-    assert.ok(o.group !== undefined || o.type !== undefined, `${o.id}: no target`);
-    const g = o.group !== undefined ? CATS.groups.find((x) => x.id === o.group) : null;
-    const t = o.type !== undefined ? CATS.types.find((x) => x.id === o.type) : null;
-    if (o.group !== undefined) assert.ok(g, `${o.id}: no group ${o.group}`);
-    if (o.type !== undefined) assert.ok(t, `${o.id}: no type ${o.type}`);
-    if (g && t) assert.equal(t.group, g.id, `${o.id}: ${t.id} is not in ${g.id}`);
-    if (o.tier !== undefined) {
-      const tier = t ? UE.tierOf({ typeId: t.id }, "stamp", V) : g.tier;
-      assert.ok(tier && tier.values.some((v) => v.id === o.tier), `${o.id}: no tier value ${o.tier}`);
+    assert.deepEqual(Object.keys(o).filter((k) => !["id", "label", "type", "tier"].includes(k)), [], `${o.id}: unknown fields`);
+    if (o.type === undefined) {
+      assert.equal(o.tier, undefined, `${o.id}: a tier without a type`);
+      continue;
     }
+    const t = CATS.types.find((x) => x.id === o.type);
+    assert.ok(t, `${o.id}: no type ${o.type}`);
+    if (o.tier !== undefined) assert.ok((t.tiers || []).some((v) => v.id === o.tier), `${o.id}: ${o.type} has no tier ${o.tier}`);
   }
 });
 
-test("old stamp ids migrate: weak enemies to their type + 弱小, MediumMeleeEnemy to 近战 + 中等, EliteEnemy to 敌人 + 精英; MoneyBox and YinYangStatue keep their type with no tier picked", () => {
+test("old stamp ids migrate: weak enemies to their type + 弱小, MediumMeleeEnemy to 近战 + 中等, EliteEnemy to 未分类; MoneyBox and YinYangStatue keep their type with no tier picked", () => {
   const ids = ["WeakMeleeEnemy", "WeakRangedEnemy", "WeakFlyingEnemy", "MediumMeleeEnemy", "EliteEnemy", "MoneyBox", "YinYangStatue"];
-  const doc = { stamps: ids.map((typeId, i) => ({ id: "s" + i, name: "x", typeId, points: [] })) };
-  doc.stamps.push({ id: "byName", name: "弱小近战敌人", points: [] }, { id: "box", name: "钱盒", points: [] });
+  const doc = { stamps: ids.map((typeId, i) => ({ id: "s" + i, name: "x" + i, typeId, points: [] })) };
+  doc.stamps.push({ id: "byName", name: "弱小近战敌人", points: [] }, { id: "box", name: "钱盒", points: [] }, { id: "elite", name: "精英怪", points: [] });
   const out = UE.migrateTypeData(doc, TYPES);
-  const ov = UE.vocabOf(out, TYPES.types);
-  assert.deepEqual(out.stamps.map((s) => [s.typeId, s.typeGroup, s.tier, UE.statusLabelOf(s, "stamp", ov)]), [
-    ["MeleeEnemy", undefined, "Weak", ""],
-    ["RangedEnemy", undefined, "Weak", ""],
-    ["FlyingEnemy", undefined, "Weak", ""],
-    ["MeleeEnemy", undefined, "Medium", ""],
-    [null, "Enemy", "Elite", "敌人（未选小类）"],
-    ["MoneyBox", undefined, undefined, "钱盒（未选大小）"],
-    ["YinYangStatue", undefined, undefined, "阴阳雕像（未选阴阳）"],
-    ["MeleeEnemy", undefined, "Weak", ""],
-    ["MoneyBox", undefined, undefined, "钱盒（未选大小）"],
+  const ov = UE.vocabOf(out, TYPES.types, CATS);
+  assert.deepEqual(out.stamps.map((s) => [s.name, s.typeId, s.tier, UE.statusLabelOf(s, "stamp", ov)]), [
+    ["x0", "MeleeEnemy", "Weak", ""],
+    ["x1", "RangedEnemy", "Weak", ""],
+    ["x2", "FlyingEnemy", "Weak", ""],
+    ["x3", "MeleeEnemy", "Medium", ""],
+    ["x4", null, undefined, "未分类"],
+    ["x5", "MoneyBox", undefined, "钱盒（未选大小）"],
+    ["x6", "YinYangStatue", undefined, "阴阳雕像（未选阴阳）"],
+    ["弱小近战敌人", "MeleeEnemy", "Weak", ""],
+    ["钱盒", "MoneyBox", undefined, "钱盒（未选大小）"],
+    ["精英怪", null, undefined, "未分类"],
   ]);
   assert.deepEqual(out.stamps.slice(0, 4).map((s) => s.anchor), ["SnapToGround", "SnapToGround", "FloatInAir", "SnapToGround"]);
-  const exported = UE.buildExportDoc(out, TYPES.regions, TYPES.types);
-  assert.deepEqual(exported.stamps.map((s) => s.typeId ?? null), ["MeleeEnemy", "RangedEnemy", "FlyingEnemy", "MeleeEnemy", null, null, null, "MeleeEnemy", null]);
+  const exported = UE.buildExportDoc(out, TYPES.regions, TYPES.types, CATS);
+  assert.deepEqual(exported.stamps.map((s) => s.typeId ?? null), ["MeleeEnemy", "RangedEnemy", "FlyingEnemy", "MeleeEnemy", null, null, null, "MeleeEnemy", null, null]);
 });
 
-test("the three-level picker's first level with the default categories: 敌人 once, structure and edge layers have only types", () => {
-  const first = (layer) => UE.typePickerEntries(V, layer).map((e) => (e.group ? e.group.id : e.type.id));
-  assert.deepEqual(first("stamp"), ["PlayerStart", "SavePoint", "Mechanism", "MoneyBox", "Collectible", "JudgeMask", "Artifact", "YinYangStatue", "BaiLing", "Enemy"]);
-  for (const layer of ["structure", "edge"]) assert.ok(UE.typePickerEntries(V, layer).every((e) => e.type), layer);
+test("the Type dropdown with the default categories: the types outside 敌人, then the 敌人 section; structure and edge layers have one section", () => {
+  const sections = UE.typePickerSections(V, "stamp").map((s) => [s.submenu && s.submenu.label, s.types.map((t) => t.id)]);
+  assert.deepEqual(sections, [
+    [null, ["PlayerStart", "SavePoint", "Mechanism", "MoneyBox", "Collectible", "JudgeMask", "Artifact", "YinYangStatue", "BaiLing"]],
+    ["敌人", ["MeleeEnemy", "RangedEnemy", "FlyingEnemy"]],
+  ]);
+  for (const layer of ["structure", "edge"]) assert.deepEqual(UE.typePickerSections(V, layer).map((s) => s.submenu), [null], layer);
 });
 
 test("export writes the locked anchor of an enemy type, whatever the element stored; other types keep theirs", () => {
@@ -175,7 +179,7 @@ test("export writes the locked anchor of an enemy type, whatever the element sto
       { id: "d", name: "box", typeId: "MoneyBox", tier: "Small", points: [] },
     ],
   };
-  const out = UE.buildExportDoc(doc, TYPES.regions, TYPES.types);
+  const out = UE.buildExportDoc(doc, TYPES.regions, TYPES.types, CATS);
   assert.deepEqual(out.stamps.map((s) => s.anchor), ["FloatInAir", "SnapToGround", "FloatInAir", "SnapToGround"]);
 });
 

@@ -795,7 +795,7 @@ textarea {
   margin: 4px 0 10px;
   max-width: 240px;
 }
-.cat-group {
+.cat-section {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 8px;
@@ -812,14 +812,14 @@ textarea {
   gap: 6px;
   flex-wrap: wrap;
 }
-.cat-loose {
+.cat-entry {
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding-bottom: 5px;
   border-bottom: 1px dashed var(--line);
 }
-.cat-loose:last-child {
+.cat-entry:last-child {
   border-bottom: 0;
   padding-bottom: 0;
 }
@@ -877,7 +877,7 @@ textarea {
 .cat-lock {
   padding: 0;
 }
-.cat-gen {
+.cat-import {
   font-size: 10.5px;
   font-family: var(--mono);
   color: var(--tx-mute);
@@ -885,7 +885,7 @@ textarea {
   border-radius: 4px;
   padding: 0 4px;
 }
-.cat-gen.manual {
+.cat-import.manual {
   color: var(--warn);
 }
 .cat-id {

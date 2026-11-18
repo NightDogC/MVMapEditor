@@ -131,9 +131,10 @@ test("migrate with the vocabulary fills each stamp's anchor: the type's default,
 
 test("loading gives a document without stamp categories the defaults, keeps a document's own, and keeps the version", () => {
   const fresh = load(v1());
-  assert.deepEqual(fresh.stampCategories, TYPES.defaultStampCategories);
+  const defaults = TYPES.defaultStampCategories;
+  assert.deepEqual(fresh.stampCategories, { ...defaults, types: defaults.types.map(({ importMethod, ...t }: { importMethod: string }) => t) }, "without importMethod");
   assert.equal(fresh.version, 2);
-  const own = { groups: [], types: [{ id: "T_1", label: "Mine", generate: "manual", color: "#000000", emoji: "m" }] };
+  const own = { submenus: [], types: [{ id: "T_1", label: "Mine", color: "#000000", emoji: "m" }] };
   const mine = load({ ...v1(), stampCategories: own, stamps: [{ id: "m", name: "x", emoji: "⭐", color: "#fff", notes: "", typeId: "T_1", points: [] }] });
   assert.deepEqual(mine.stampCategories, own);
   assert.equal(mine.stamps[0].typeId, "T_1");

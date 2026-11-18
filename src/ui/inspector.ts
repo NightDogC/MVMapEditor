@@ -1,5 +1,5 @@
 /* Inspector: edit whatever is selected. */
-import type { Room, Door, Key, Lock, Structure, EdgeStruct, Stamp, StampAnchor, Note, ElementLayer } from "../model/types.ts";
+import type { Room, Door, Key, Lock, Structure, EdgeStruct, Stamp, StampAnchor, StampType, Note, ElementLayer } from "../model/types.ts";
 import { AREA_COLORS, LOCK_COLORS, STRUCT_COLORS, NOTE_COLORS, STAMP_EMOJI, pickEmoji } from "../model/constants.ts";
 import {
   S, requestDraw, pushUndo, commit, selExists, activeRoom, areaById, lockById, keyById, roomById, structById, edgeStructById,
@@ -12,7 +12,7 @@ import { orderScope, reorderSel } from "../state/order.ts";
 import { bbox } from "../geom/region.ts";
 import { segLength } from "../geom/segs.ts";
 import { TICKS, fromT } from "../geom/lattice.ts";
-import { UE, REGIONS, vocabOf, type ElementType } from "../ue.ts";
+import { UE, REGIONS, IMPORT_TEXT, vocabOf, type ElementType } from "../ue.ts";
 import { setTool } from "../tools/tool.ts";
 import { renderLists } from "./panels.ts";
 import { $, esc } from "../util.ts";
@@ -393,57 +393,44 @@ function inspectLock(host: HTMLElement, l: Lock): void {
   };
 }
 
-/** Option value of a group in the first-level Type dropdown (type ids are plain words, so they never start with it). */
-const GROUP_VALUE = "group:";
-
-/** Type picker for structures, edge structures and stamps; only the types of `layer` are offered. Stamps pick from the
-    map's stamp categories in up to three dropdowns, each shown only when it applies: "Type" (a type, or a group ▸),
-    "Subtype" (the type inside the group), and the tier, titled with the tier's name (大小, 强弱). Until every shown
-    dropdown is picked the element is 未选完: shown red with what is missing (UE.statusLabelOf). */
+/** Type picker for structures, edge structures and stamps; only the types of `layer` are offered. One "类型 Type"
+    dropdown: the types outside any submenu, then one <optgroup> per stamp submenu (UE.typePickerSections). A type with
+    tiers adds "档位 Tier · <tier label>" under it. The hint under the last dropdown gives the ids UE uses and the import
+    method once the element is complete, else what is missing, red (UE.statusLabelOf). */
 function typeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): string {
   const vocab = vocabOf(S.doc);
   const cur = UE.elementTypeOf(it, layer, vocab);
-  const group = UE.typeGroupOf(it, layer, vocab);
+  const tiers = UE.tiersOfType(cur);
   const tier = UE.tierOf(it, layer, vocab);
-  const tierValue = UE.tierValueOf(it, layer, vocab);
   const status = UE.elementStatusOf(it, layer, vocab);
-  const unknown = it.typeId != null && !cur && !group;
+  const unknown = it.typeId != null && !cur;
   const hint =
     status === "complete"
-      ? cur!.generate === "auto"
-        ? "UE import generates this element"
-        : "UE import leaves a placeholder — placed by hand"
+      ? `UE: ${esc(cur!.id)}${tier ? ` / ${esc(tier.id)}` : ""} — 导入方式：${IMPORT_TEXT[UE.importMethodOf(cur!.id, layer, vocab)]}`
       : status === "incomplete"
         ? `${esc(UE.statusLabelOf(it, layer, vocab))} — finish picking for the UE importer`
         : unknown
           ? `Not a ${layer === "stamp" ? "stamp type of this map" : "type of this layer in mvmap-types.js"} — counts as 未分类`
           : "未分类 — pick a type for the UE importer";
-  const typeOption = (t: ElementType, text: string) =>
-    `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(text)} · ${t.generate}</option>`;
+  const typeOption = (t: ElementType) =>
+    `<option value="${esc(t.id)}" ${cur && cur.id === t.id ? "selected" : ""}>${esc(t.emoji)} ${esc(t.label)} · ${UE.importMethodOf(t.id, layer, vocab)}</option>`;
   // label + <select> of each dropdown shown, top to bottom; the hint goes under the last one
   const fields = [
-    `<label>Type</label><select id="i-type">
-      <option value="" ${cur || unknown || group ? "" : "selected"}>— 未分类 —</option>
+    `<label>类型 Type</label><select id="i-type">
+      <option value="" ${cur || unknown ? "" : "selected"}>— 未分类 —</option>
       ${unknown ? `<option value="${esc(it.typeId)}" selected>unknown: ${esc(it.typeId)}</option>` : ""}
-      ${UE.typePickerEntries(vocab, layer)
-        .map((e) =>
-          e.group !== undefined
-            ? `<option value="${esc(GROUP_VALUE + e.group.id)}" ${group === e.group ? "selected" : ""}>${esc(e.types[0]?.emoji ?? "")} ${esc(e.group.label)} ▸</option>`
-            : typeOption(e.type, e.type.label),
-        )
+      ${UE.typePickerSections(vocab, layer)
+        .map((s) => {
+          const options = s.types.map(typeOption).join("");
+          return s.submenu ? `<optgroup label="${esc(s.submenu.label)}">${options}</optgroup>` : options;
+        })
         .join("")}
     </select>`,
   ];
-  if (group) {
-    fields.push(`<label>Subtype</label><select id="i-subtype">
-      ${cur ? "" : `<option value="" selected>— 选小类 —</option>`}
-      ${UE.groupMembers(vocab, layer, group.id).map((t) => typeOption(t, t.label)).join("")}
-    </select>`);
-  }
-  if (tier) {
-    fields.push(`<label>${esc(tier.label)}</label><select id="i-tier">
-      ${tierValue ? "" : `<option value="" selected>— 未选 —</option>`}
-      ${tier.values.map((v) => `<option value="${esc(v.id)}" ${tierValue === v ? "selected" : ""}>${esc(v.label)}</option>`).join("")}
+  if (cur && tiers) {
+    fields.push(`<label>档位 Tier · ${esc((cur as StampType).tierLabel ?? "")}</label><select id="i-tier">
+      ${tier ? "" : `<option value="" selected>— 未选 —</option>`}
+      ${tiers.map((v) => `<option value="${esc(v.id)}" ${tier === v ? "selected" : ""}>${esc(v.label)}</option>`).join("")}
     </select>`);
   }
   fields[fields.length - 1] += `<div class="meta ${status === "complete" ? "" : "err"}">${hint}</div>`;
@@ -452,20 +439,15 @@ function typeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): str
 function bindTypeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer): void {
   const vocab = vocabOf(S.doc);
   const apply = (next: Structure | EdgeStruct | Stamp) => {
-    // re-picked the current entry, the "unknown" one, or the group the element is already in
-    const same = (k: "typeId" | "typeGroup" | "tier") => ((next as Stamp)[k] ?? null) === ((it as Stamp)[k] ?? null);
-    if (same("typeId") && same("typeGroup") && same("tier")) return;
+    // re-picked the current entry, or the "unknown" one
+    const same = (k: "typeId" | "tier") => ((next as Stamp)[k] ?? null) === ((it as Stamp)[k] ?? null);
+    if (same("typeId") && same("tier")) return;
     pushUndo();
     for (const k of Object.keys(it)) if (!(k in next)) delete (it as unknown as Record<string, unknown>)[k]; // the choose* functions drop keys to clear them
     Object.assign(it, next);
     commit();
   };
-  $<Sl>("#i-type").onchange = (e) => {
-    const v = (e.target as Sl).value;
-    apply(v.startsWith(GROUP_VALUE) ? UE.chooseTypeGroup(it, layer, v.slice(GROUP_VALUE.length), vocab) : UE.chooseType(it, layer, v, vocab));
-  };
-  const sub = q<Sl>("#i-subtype");
-  if (sub) sub.onchange = () => sub.value && apply(UE.chooseType(it, layer, sub.value, vocab));
+  $<Sl>("#i-type").onchange = (e) => apply(UE.chooseType(it, layer, (e.target as Sl).value, vocab));
   const tier = q<Sl>("#i-tier");
   if (tier) tier.onchange = () => tier.value && apply(UE.chooseTier(it, layer, tier.value, vocab));
 }
