@@ -7,7 +7,7 @@ import { docBBox } from "../state/layers.ts";
 import { makeView, fitWorld } from "../render/view.ts";
 import { drawWorld } from "../render/world.ts";
 import { renderUI } from "../ui/panels.ts";
-import { UE, REGIONS, FIXED_TYPES } from "../ue.ts";
+import { UE, REGIONS, FIXED_TYPES, TYPES_FILE } from "../ue.ts";
 import { $, uid, clamp, saveBlob, slug } from "../util.ts";
 
 const ueErrorText = (errs: string[]) => "Region / room number problems (the UE importer will reject these rooms):\n\n• " + errs.join("\n• ");
@@ -18,7 +18,7 @@ export function exportJSON(): void {
   const errs = UE.findUeFieldErrors(S.doc, REGIONS);
   if (errs.length && !confirm(ueErrorText(errs) + "\n\nExport anyway?")) return;
   S.doc.updated = Date.now();
-  const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS, FIXED_TYPES), null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(UE.buildExportDoc(S.doc, REGIONS, FIXED_TYPES, TYPES_FILE.defaultStampCategories), null, 2)], { type: "application/json" });
   saveBlob(blob, slug(S.doc.name) + ".mvmap.json");
 }
 

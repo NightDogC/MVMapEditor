@@ -86,7 +86,7 @@ PAGE_TEMPLATE = """<!doctype html>
     await document.fonts.load(font);
   }} catch (e) {{}}
   const stampTypes = {stamp_types} || MVMapTypes.defaultStampCategories.types;
-  for (const t of [...stampTypes, ...MVMapTypes.types.filter((x) => x.generate === "manual")]) {{
+  for (const t of [...stampTypes, ...MVMapTypes.types.filter((x) => x.importMethod === "manual")]) {{
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
     const ctx = canvas.getContext("2d");

@@ -39,7 +39,7 @@ const EXPECTED = {
   "stamp:stamp_c1ltxmjc8r": "Collectible", // 收集品
   "stamp:stamp_mhtvocjkdf": "FlyingEnemy", // 弱小飞行敌人; WeakFlyingEnemy until 2026-11-12, migrated by oldStampIds
   "stamp:stamp_j6qlyweyxk": "SavePoint", // 傩公傩母像
-  "stamp:stamp_1jv47lsd5c": null, // 精英怪; EliteEnemy opens as group 敌人 + 精英, ground or flying is left for the designer
+  "stamp:stamp_1jv47lsd5c": "MeleeEnemy", // 精英怪; EliteEnemy until 2026-11-12, then group 敌人 + 精英 until the designer picked 近战
   "stamp:stamp_1v066y5pnn": "Artifact", // 法器
   "stamp:stamp_q0vtpgzrky": "MeleeEnemy", // 中等近战敌人; MediumMeleeEnemy until 2026-11-12, migrated by oldStampIds
   "stamp:stamp_v4ca7wcnwq": "YinYangStatue", // 阴阳雕像; 阴 / 阳 (tier) is left for the designer
@@ -76,28 +76,32 @@ test("nuosoul.mvmap.json: the elements it had on 2026-10-19 are still classified
   for (const key of present) assert.equal(got[key], EXPECTED[key], key);
 });
 
-test("nuosoul.mvmap.json: enemies open with their type and 强弱 (精英怪 with only the group), the money box and the statue with only the tier left to pick", { skip }, () => {
+test("nuosoul.mvmap.json: enemies keep their type and 强弱 through the category upgrade; the statue still has its tier left to pick", { skip }, () => {
   const doc = load();
-  const vocab = UE.vocabOf(doc, TYPES.types);
-  const got = Object.fromEntries((doc.stamps || []).map((el) => [el.id, [el.typeId, el.typeGroup, el.tier, UE.statusLabelOf(el, "stamp", vocab)]]));
+  const vocab = UE.vocabOf(doc, TYPES.types, TYPES.defaultStampCategories);
+  const got = Object.fromEntries((doc.stamps || []).map((el) => [el.id, [el.typeId, el.tier, UE.statusLabelOf(el, "stamp", vocab)]]));
+  // as picked in Perforce revision #6 (2026-11-17), when 强弱 still hung on the group 敌人
   const expected = {
-    stamp_n8derrft9k: ["MeleeEnemy", undefined, "Weak", ""], // 弱小近战敌人
-    stamp_8rf13o0y61: ["RangedEnemy", undefined, "Weak", ""], // 弱小远程敌人
-    stamp_mhtvocjkdf: ["FlyingEnemy", undefined, "Weak", ""], // 弱小飞行敌人
-    stamp_q0vtpgzrky: ["MeleeEnemy", undefined, "Medium", ""], // 中等近战敌人
-    stamp_1jv47lsd5c: [null, "Enemy", "Elite", "敌人（未选小类）"], // 精英怪
-    stamp_fchrbmiwuv: ["MoneyBox", undefined, undefined, "钱盒（未选大小）"], // 钱盒
-    stamp_v4ca7wcnwq: ["YinYangStatue", undefined, undefined, "阴阳雕像（未选阴阳）"], // 阴阳雕像
+    stamp_n8derrft9k: ["MeleeEnemy", "Weak", ""], // 敌人·近战·弱小
+    stamp_8rf13o0y61: ["RangedEnemy", "Weak", ""], // 敌人·远程·弱小
+    stamp_mhtvocjkdf: ["FlyingEnemy", "Weak", ""], // 敌人·飞行·弱小
+    stamp_q0vtpgzrky: ["MeleeEnemy", "Medium", ""], // 敌人·近战··中等
+    stamp_1jv47lsd5c: ["MeleeEnemy", "Elite", ""], // 敌人·近战·精英
+    stamp_fchrbmiwuv: ["MoneyBox", "Medium", ""], // 钱盒·中
+    stamp_v4ca7wcnwq: ["YinYangStatue", undefined, "阴阳雕像（未选阴阳）"], // 阴阳雕像, exported with pendingTypeId
   };
   for (const [id, want] of Object.entries(expected)) if (id in got) assert.deepEqual(got[id], want, id);
-  assert.deepEqual(doc.stampCategories, TYPES.defaultStampCategories, "the file has no categories: it gets the defaults");
+  assert.ok(doc.stamps.every((el) => !("typeGroup" in el)), "no group-only stamps are left");
+  const defaults = { ...TYPES.defaultStampCategories, types: TYPES.defaultStampCategories.types.map(({ importMethod, ...t }) => t) };
+  assert.deepEqual(doc.stampCategories, defaults, "the file's categories (the old defaults) upgrade to exactly the new defaults");
+  assert.deepEqual(UE.stampCategoryProblems(JSON.parse(fs.readFileSync(FILE, "utf8"))), [], "the upgrade is not reported");
 });
 
 test("nuosoul.mvmap.json: the export carries typeId on exactly the complete elements", { skip }, () => {
   const doc = load();
   const vocab = UE.vocabOf(doc, TYPES.types);
   const got = migratedTypes(doc);
-  const out = UE.buildExportDoc(doc, TYPES.regions, TYPES.types);
+  const out = UE.buildExportDoc(doc, TYPES.regions, TYPES.types, TYPES.defaultStampCategories);
   for (const [list, layer] of LISTS) {
     for (const el of out[list] || []) {
       const key = `${layer}:${el.id}`;
