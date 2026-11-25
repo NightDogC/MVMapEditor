@@ -20,6 +20,8 @@ npm run build      # type-check and build into dist/
 npm run preview    # serve the built dist/
 ```
 
+While `npm run dev` runs, the page exposes `window.__mv` (`S` the state, `loadDoc(json)` opens a map, `app`, `migrateDoc`): to check a change on screen without clicking through Import, load a map from the console or a browser tool (`__mv.loadDoc({...})`), set `__mv.S.cam` and screenshot. After editing `mvmap-types.js` or `mvmap-ue.js`, hard-refresh (`Ctrl+Shift+R`): they are plain scripts the browser may keep cached.
+
 The build in `dist/` is static and uses relative paths, so it can be served from any folder of any static host. It does need to be served over HTTP — browsers don't run module scripts from `file://`.
 
 `mvmap-types.js` and `mvmap-ue.js` stay plain scripts at the repo root (they are shared with the UE importer, its node tests and `export_mvmap_stamp_icons.py`); the page loads them before the app and the build copies them next to `index.html`. The editor warns and stops working without them.

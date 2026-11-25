@@ -76,21 +76,30 @@ test("nuosoul.mvmap.json: the elements it had on 2026-10-19 are still classified
   for (const key of present) assert.equal(got[key], EXPECTED[key], key);
 });
 
-test("nuosoul.mvmap.json: enemies keep their type and 强弱 through the category upgrade; the statue still has its tier left to pick", { skip }, () => {
+test("nuosoul.mvmap.json: stamps keep their type and a valid tier through the category upgrade", { skip }, () => {
   const doc = load();
   const vocab = UE.vocabOf(doc, TYPES.types, TYPES.defaultStampCategories);
-  const got = Object.fromEntries((doc.stamps || []).map((el) => [el.id, [el.typeId, el.tier, UE.statusLabelOf(el, "stamp", vocab)]]));
-  // as picked in Perforce revision #6 (2026-11-17), when 强弱 still hung on the group 敌人
+  // [type, had a tier] as picked in Perforce revision #6 (2026-11-17), when 强弱 still hung on the group 敌人. Which tier
+  // is the designers' to change (2026-11-25 the 钱盒 went from 中 to 小), so only this is checked: a stamp that had one
+  // still has one of its type's tiers (the editor can't clear a picked tier, only a lost one would fail), and the
+  // status is complete exactly when it has one
   const expected = {
-    stamp_n8derrft9k: ["MeleeEnemy", "Weak", ""], // 敌人·近战·弱小
-    stamp_8rf13o0y61: ["RangedEnemy", "Weak", ""], // 敌人·远程·弱小
-    stamp_mhtvocjkdf: ["FlyingEnemy", "Weak", ""], // 敌人·飞行·弱小
-    stamp_q0vtpgzrky: ["MeleeEnemy", "Medium", ""], // 敌人·近战··中等
-    stamp_1jv47lsd5c: ["MeleeEnemy", "Elite", ""], // 敌人·近战·精英
-    stamp_fchrbmiwuv: ["MoneyBox", "Medium", ""], // 钱盒·中
-    stamp_v4ca7wcnwq: ["YinYangStatue", undefined, "阴阳雕像（未选阴阳）"], // 阴阳雕像, exported with pendingTypeId
+    stamp_n8derrft9k: ["MeleeEnemy", true], // 敌人·近战·弱小
+    stamp_8rf13o0y61: ["RangedEnemy", true], // 敌人·远程·弱小
+    stamp_mhtvocjkdf: ["FlyingEnemy", true], // 敌人·飞行·弱小
+    stamp_q0vtpgzrky: ["MeleeEnemy", true], // 敌人·近战·中等
+    stamp_1jv47lsd5c: ["MeleeEnemy", true], // 敌人·近战·精英
+    stamp_fchrbmiwuv: ["MoneyBox", true], // 钱盒·中
+    stamp_v4ca7wcnwq: ["YinYangStatue", false], // 阴阳雕像, exported with pendingTypeId while its tier is unpicked
   };
-  for (const [id, want] of Object.entries(expected)) if (id in got) assert.deepEqual(got[id], want, id);
+  for (const el of doc.stamps || []) {
+    if (!(el.id in expected)) continue;
+    const [type, hadTier] = expected[el.id];
+    assert.equal(el.typeId, type, el.id);
+    const tier = UE.tierOf(el, "stamp", vocab);
+    if (hadTier || el.tier != null) assert.ok(tier, `${el.id}: no tier of ${type} (stored: ${el.tier})`);
+    assert.equal(UE.statusLabelOf(el, "stamp", vocab) === "", !!tier, `${el.id}: complete exactly when it has a tier`);
+  }
   assert.ok(doc.stamps.every((el) => !("typeGroup" in el)), "no group-only stamps are left");
   const defaults = { ...TYPES.defaultStampCategories, types: TYPES.defaultStampCategories.types.map(({ importMethod, ...t }) => t) };
   assert.deepEqual(doc.stampCategories, defaults, "the file's categories (the old defaults) upgrade to exactly the new defaults");
