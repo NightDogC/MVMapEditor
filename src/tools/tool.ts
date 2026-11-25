@@ -1,5 +1,6 @@
 import { S, requestDraw, type Tool } from "../state/store.ts";
 import { renderPencilBar } from "../ui/pencilbar.ts";
+import { renderBandBar } from "../ui/bandbar.ts";
 import { renderSnapBar } from "../ui/snapbar.ts";
 import { $ } from "../util.ts";
 
@@ -20,7 +21,7 @@ export const HINTS: Record<Tool, string> = {
   perase: "Drag to erase pencil strokes only — rooms, structures and everything else stay untouched",
   note: `Click to add a note · drag a note to move it · its <kbd>+</kbd> button expands it · <kbd>Ctrl</kbd>-click removes · ${SNAP}`,
   stamp: `Click to drop the active stamp · drag a stamp to move it · <kbd>Ctrl</kbd>-click removes · <kbd>Shift</kbd> starts a new stamp · ${SNAP}`,
-  edge: `Drag a segment, any angle · <kbd>Shift</kbd> while dragging locks 45° · <kbd>Shift</kbd> at the start begins a new one · <kbd>Ctrl</kbd> erases · ${SNAP}`,
+  edge: `Drag a segment, any angle · <kbd>Shift</kbd> while dragging locks 45° · <kbd>Shift</kbd> at the start begins a new one · <kbd>Ctrl</kbd> erases · spikes (band edges): trace the terrain surface, the band grows into the empty side · ${SNAP}`,
 };
 
 /** Show a short message in the hint bar, then put the tool's hint back. */
@@ -43,6 +44,7 @@ export function setTool(t: Tool): void {
   $("#hint").innerHTML = HINTS[t] || "";
   $("#world").style.cursor = t === "pan" ? "grab" : t === "select" ? "default" : "crosshair";
   renderPencilBar();
+  renderBandBar();
   renderSnapBar();
   requestDraw();
 }

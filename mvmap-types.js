@@ -38,6 +38,10 @@
                     manual（只放占位）：只生成占位标记，由人工摆放
          color / emoji - 新建元素（名字还是 "Structure 1" 这类默认名、还没选过类型）选这个类型时，
                          名字换成 label，颜色换成这里的值；其他情况选类型只改类型
+         band     - （可选，只用于 edge）带状边：线段画在地形表面上，代表贴着地形的一层东西，从线段往空的一侧长出一个厚度。
+                    { thickness: 默认厚度（格） }。每条线段可以有自己的厚度（segs[].t，格），不写时用这里的默认值。
+                    编辑器按 mvmap-ue.js 的 isBandType / bandThicknessOf 判断；带状边和别的 Edge 互不扣除。
+                    哪一侧算空、拐角怎么拼接见 src/geom/band.ts，UE 导入器照同一套规则生成
        不在这里的名字加载后显示"未分类"，导出时不写 typeId。 */
     types: [
       // ── structure ──
@@ -54,6 +58,8 @@
       { id: "OneWayDoorBreakableSide", label: "单向门可破坏侧", layer: "edge", importMethod: "manual", color: "#e0555f", emoji: "💥" }, // 人工摆放
       { id: "MovableJumpOffPlatformStart", label: "可移动下落平台-起点", layer: "edge", importMethod: "manual", color: "#d5c972", emoji: "⬅️" }, // 人工摆放
       { id: "MovableJumpOffPlatformEnd", label: "可移动下落平台-终点", layer: "edge", importMethod: "manual", color: "#5a542a", emoji: "➡️" }, // 人工摆放
+      { id: "DamageEdge", label: "刺边", layer: "edge", importMethod: "auto", color: "#e0555f", emoji: "⚠️", band: { thickness: 1 } }, // 每条线段生成一个刺（新刺类），沿地形表面描线
+      { id: "HiddenArrowTrap", label: "暗箭机关", layer: "edge", importMethod: "manual", color: "#f0a13a", emoji: "🎯" }, // 画在箭射出来的那一面，人工摆放
     ],
 
     /* stamp 分类的默认值，和 UE 的 StampTypes 一一对应：types[id].tiers[tier] ↔ StampTypes[id].Tiers[tier]。

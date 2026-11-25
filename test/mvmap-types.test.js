@@ -57,7 +57,7 @@ test("the importer's auto types: Landscape, DamageTerrain, JumpOffPlatform, MapC
     ...CATS.types.filter((t) => UE.importMethodOf(t.id, "stamp", V) === "auto").map((t) => `stamp:${t.id}`),
   ].sort();
   assert.deepEqual(auto, [
-    "edge:JumpOffPlatform", "edge:MapConnection",
+    "edge:DamageEdge", "edge:JumpOffPlatform", "edge:MapConnection",
     "stamp:FlyingEnemy", "stamp:MeleeEnemy", "stamp:MoneyBox", "stamp:RangedEnemy", "stamp:SavePoint", "stamp:YinYangStatue",
     "structure:DamageTerrain", "structure:Landscape",
   ]);
@@ -196,4 +196,23 @@ test("an untyped edge named 地图联通 (as in maps drawn before the type exist
   assert.equal(out.edgeStructs[1].typeId, null, "picked 未分类 by hand: kept");
   assert.equal(out.structures[0].typeId, undefined);
   assert.equal(UE.manualMarkOf(out.edgeStructs[0], "edge", V), null);
+});
+
+test("band edge types: only edge types have `band`, with a positive default thickness; 刺边 is one, 暗箭机关 isn't", () => {
+  for (const t of TYPES.types) {
+    if (t.band === undefined) continue;
+    assert.equal(t.layer, "edge", `${t.id}: only edge types can be band edges`);
+    assert.deepEqual(Object.keys(t.band), ["thickness"], t.id);
+    assert.ok(Number.isFinite(t.band.thickness) && t.band.thickness > 0, t.id);
+  }
+  const byId = (id) => TYPES.types.find((t) => t.id === id);
+  assert.deepEqual(
+    [byId("DamageEdge").label, byId("DamageEdge").importMethod, byId("DamageEdge").color],
+    ["刺边", "auto", byId("DamageTerrain").color],
+    "刺边 is auto, coloured like 刺"
+  );
+  assert.equal(UE.isBandType("DamageEdge", V), true);
+  assert.equal(UE.bandThicknessOf("DamageEdge", V), 1);
+  assert.deepEqual([byId("HiddenArrowTrap").label, byId("HiddenArrowTrap").layer, byId("HiddenArrowTrap").importMethod], ["暗箭机关", "edge", "manual"]);
+  assert.equal(UE.isBandType("HiddenArrowTrap", V), false);
 });

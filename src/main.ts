@@ -12,6 +12,7 @@ import { loadToolKeys } from "./tools/keymap.ts";
 import { setTool } from "./tools/tool.ts";
 import { bindPanels, setStampZoom } from "./ui/bind.ts";
 import { bindPencilBar, loadPencilPrefs } from "./ui/pencilbar.ts";
+import { bindBandBar } from "./ui/bandbar.ts";
 import { bindSnapBar } from "./ui/snapbar.ts";
 import { bindModals } from "./ui/modals.ts";
 import { bindFiles, loadDoc } from "./io/files.ts";
@@ -24,6 +25,7 @@ async function boot(): Promise<void> {
   bindKeyboard();
   bindPanels();
   bindPencilBar();
+  bindBandBar();
   bindSnapBar();
   bindModals();
   bindFiles();

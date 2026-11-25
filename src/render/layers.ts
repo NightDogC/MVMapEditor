@@ -7,7 +7,7 @@ import { outline, bbox, type TRect, type TLine } from "../geom/region.ts";
 import type { TSeg } from "../geom/segs.ts";
 import { solidOutline, type TPoly } from "../geom/poly.ts";
 import { S, structColor } from "../state/store.ts";
-import { sT, sPieces, cT, eT, ePieces, selPiece } from "../state/layers.ts";
+import { sT, sPieces, cT, eT, ePieces, selPiece, bandLayoutOf } from "../state/layers.ts";
 import { FONTF, roundRect, edgeThickness, hatchPattern, markOf, markAlpha, MARK_STYLE } from "./common.ts";
 import { clamp, hexA, shade } from "../util.ts";
 
@@ -87,29 +87,30 @@ export function strokeSegs(ctx: CanvasRenderingContext2D, V: View, segs: TSeg[])
   ctx.stroke();
 }
 
+/** The structure hatch for `g`, anchored to the world so it doesn't swim while panning. */
+function worldHatch(g: CanvasRenderingContext2D, V: View): CanvasPattern | null {
+  const hatch = hatchPattern(g);
+  if (hatch && hatch.setTransform && typeof DOMMatrix !== "undefined") {
+    try {
+      hatch.setTransform(new DOMMatrix().translate(V.sx(0), V.sy(0)));
+    } catch {
+      /* old browsers */
+    }
+  }
+  return hatch;
+}
+
 export function drawStructures(ctx: CanvasRenderingContext2D, V: View): void {
   const s = CELL * V.cam.zoom;
   const pc = S.sel && S.sel.type === "struct" ? selPiece() : null;
   const lit = pc && pc.kind === "struct" ? pc : null;
-  const hatchOf = (g: CanvasRenderingContext2D) => {
-    const hatch = hatchPattern(g);
-    if (hatch && hatch.setTransform && typeof DOMMatrix !== "undefined") {
-      // anchor the hatch to the world so it doesn't swim while panning
-      try {
-        hatch.setTransform(new DOMMatrix().translate(V.sx(0), V.sy(0)));
-      } catch {
-        /* old browsers */
-      }
-    }
-    return hatch;
-  };
   for (const st of S.doc.structures) {
     if (!st.rects.length) continue;
     const alpha = markAlpha(st, "structure");
     const cuts = cT(st);
     const g = cuts.length ? scratchFor(ctx) : ctx;
     g.globalAlpha = cuts.length ? 1 : alpha;
-    const hatch = hatchOf(g);
+    const hatch = worldHatch(g, V);
     const col = structColor(st);
     const isActive = st.id === S.activeStructId;
     const hl = lit && lit.item === st ? lit.rects : null; // the selected piece, if it's in this structure
@@ -151,10 +152,52 @@ export function drawStructures(ctx: CanvasRenderingContext2D, V: View): void {
   ctx.globalAlpha = 1;
 }
 
+/** Band edges blocked by terrain on both sides (geom/band.ts) are filled with this instead of their colour. */
+const BAND_WARN = "#ffd400";
+
+/** The bands of band edge elements (spikes): each segment's band and the bevels at its corners, filled with the
+    element's colour and the structure hatch; a segment with terrain on both sides in the warning colour. Drawn under
+    every edge line. */
+function drawBands(ctx: CanvasRenderingContext2D, V: View): void {
+  const hatch = worldHatch(ctx, V);
+  const trace = (polys: readonly (readonly { x: number; y: number }[])[]) => {
+    ctx.beginPath();
+    for (const p of polys) {
+      p.forEach((v, i) => (i ? ctx.lineTo(V.sx(v.x * CELL), V.sy(v.y * CELL)) : ctx.moveTo(V.sx(v.x * CELL), V.sy(v.y * CELL))));
+      ctx.closePath();
+    }
+  };
+  ctx.save();
+  ctx.lineJoin = "miter";
+  for (const es of S.doc.edgeStructs) {
+    const layout = es.segs.length ? bandLayoutOf(es) : null;
+    if (!layout) continue;
+    ctx.globalAlpha = markAlpha(es, "edge");
+    const col = structColor(es);
+    const ok = [...layout.segs.filter((b) => b.side !== "blocked").map((b) => b.poly), ...layout.bevels.map((b) => b.poly)];
+    const warn = layout.segs.filter((b) => b.side === "blocked").map((b) => b.poly);
+    for (const [polys, c] of [[ok, col], [warn, BAND_WARN]] as const) {
+      if (!polys.length) continue;
+      trace(polys);
+      ctx.fillStyle = hexA(c, 0.45);
+      ctx.fill();
+      if (hatch && CELL * V.cam.zoom >= 6) {
+        ctx.fillStyle = hatch;
+        ctx.fill();
+      }
+      ctx.strokeStyle = hexA(shade(c, 0.22), 0.9);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 export function drawEdgeStructs(ctx: CanvasRenderingContext2D, V: View): void {
   const pc = S.sel && S.sel.type === "edge" ? selPiece() : null;
   const sel = pc && pc.kind === "edge" ? pc : null;
   const t = edgeThickness(V.cam.zoom);
+  drawBands(ctx, V);
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";

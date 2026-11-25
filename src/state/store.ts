@@ -44,6 +44,7 @@ export const S = {
   showNotes: true,
   showPencil: true,
   pencil: { color: PENCIL_COLORS[1], size: PENCIL_SIZE.def, eraser: ERASER_SIZE.def } as PencilPrefs, // per browser
+  bandDraw: {} as Record<string, number>, // band edge type id -> thickness (cells) the Edge tool draws with, this session (ui/bandbar.ts)
   hoverPt: null as { x: number; y: number } | null, // pointer position in world px
   cutPoly: null as XY[] | null, // corners (ticks) of the polygon being drawn with S-Neg (tools/cut.ts)
   editingNoteId: null as string | null, // note whose details are being typed straight into its open box (ui/noteedit.ts)

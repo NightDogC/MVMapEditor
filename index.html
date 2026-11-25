@@ -122,6 +122,13 @@
           </label>
           <button class="mini wide" id="pb-clear" title="Remove every pencil stroke on this map (undoable)">Clear all</button>
         </div>
+        <div class="pencil-bar" id="band-bar" hidden title="Band edges (spikes…) grow this thick into the empty side of the line">
+          <span class="pb-title" id="bb-title">Edge</span>
+          <label class="pb-size">厚度 Thickness
+            <span class="num-wrap"><input type="number" id="bb-thick" min="0.0625" step="0.25" />格</span>
+          </label>
+          <span class="pb-val" id="bb-default"></span>
+        </div>
       </main>
 
       <!-- ── Right rail ────────────────────────────────────────────── -->
