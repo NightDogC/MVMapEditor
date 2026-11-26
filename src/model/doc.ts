@@ -3,7 +3,7 @@ import type { MapDoc, Structure, EdgeStruct, Stamp, Rect, Seg, Pt, XY } from "./
 import { TICKS, toT, fromT, quantize } from "../geom/lattice.ts";
 import { normalize, type TRect } from "../geom/region.ts";
 import { orient, cleanPoly, overlapsRegion, type TPoly } from "../geom/poly.ts";
-import { normalizeSegs, type TSeg } from "../geom/segs.ts";
+import { normalizeSegs, seg, type TSeg } from "../geom/segs.ts";
 import { uid, unck } from "../util.ts";
 
 export const DOC_VERSION = 2;
@@ -31,8 +31,15 @@ export function newDoc(name?: string): MapDoc {
 /* ── cell units <-> ticks ─────────────────────────────────────────── */
 export const rectToT = (r: Rect): TRect => ({ x: toT(r.x), y: toT(r.y), w: toT(r.w), h: toT(r.h) });
 export const rectFromT = (r: TRect): Rect => ({ x: fromT(r.x), y: fromT(r.y), w: fromT(r.w), h: fromT(r.h) });
-export const segToT = (s: Seg): TSeg => ({ x1: toT(s.x1), y1: toT(s.y1), x2: toT(s.x2), y2: toT(s.y2) });
-export const segFromT = (s: TSeg): Seg => ({ x1: fromT(s.x1), y1: fromT(s.y1), x2: fromT(s.x2), y2: fromT(s.y2) });
+/** A band edge thickness (cells) as stored: rounded to 4 decimals like every coordinate, or undefined when that
+    leaves nothing positive. */
+export function quantizeThickness(t: number): number | undefined {
+  const q = Math.round(t * 1e4) / 1e4;
+  return Number.isFinite(q) && q > 0 ? q : undefined;
+}
+/** The thickness `t` (band edges) is in cells on both sides. */
+export const segToT = (s: Seg): TSeg => seg(toT(s.x1), toT(s.y1), toT(s.x2), toT(s.y2), s.t);
+export const segFromT = (s: TSeg): Seg => seg(fromT(s.x1), fromT(s.y1), fromT(s.x2), fromT(s.y2), s.t);
 export const structT = (st: Structure): TRect[] => st.rects.map(rectToT);
 export const setStructT = (st: Structure, rs: TRect[]): void => void (st.rects = normalize(rs).map(rectFromT));
 /** Cell units -> ticks for a cut vertex: lattice values come back exact; a vertex a clip put on a rectangle's side
@@ -83,7 +90,9 @@ function cleanRects(v: unknown): Rect[] {
 }
 function cleanSegs(v: unknown): Seg[] {
   const ss = (Array.isArray(v) ? v : []).map(asObj).filter((s) => fin(s.x1, s.y1, s.x2, s.y2));
-  return normalizeSegs(ss.map((s) => segToT(s as Seg))).map(segFromT);
+  // a thickness that isn't a positive number is dropped: the segment shows its type's default
+  const thick = (t: unknown) => (fin(t) ? quantizeThickness(t as number) : undefined);
+  return normalizeSegs(ss.map((s) => segToT(seg(s.x1, s.y1, s.x2, s.y2, thick(s.t))))).map(segFromT);
 }
 /** Cuts as loaded: polygons of at least 3 finite points that still bite into the structure. */
 function cleanCuts(s: Structure): void {

@@ -2,7 +2,10 @@
 
    Collinear segments are compared on their supporting line: a reduced direction (a, b) and an offset c, so two
    segments lie on the same line exactly when their (a, b, c) match. Along that line a point's position is
-   t = a·x + b·y, an integer that grows in the canonical direction. */
+   t = a·x + b·y, an integer that grows in the canonical direction.
+
+   A segment may carry a thickness `t` (cells; band edges, see geom/band.ts). It is not a coordinate: every piece cut out
+   of a segment keeps it, and only collinear segments with the same thickness (or both none) merge. */
 
 import { gcd } from "./lattice.ts";
 import type { TRect } from "./region.ts";
@@ -12,6 +15,8 @@ export interface TSeg {
   y1: number;
   x2: number;
   y2: number;
+  /** thickness in cells (band edges); absent: the type's default */
+  t?: number;
 }
 interface P {
   x: number;
@@ -19,11 +24,14 @@ interface P {
 }
 
 const isZero = (s: TSeg) => s.x1 === s.x2 && s.y1 === s.y2;
+/** A segment from its coordinates, with thickness `t` when there is one. */
+export const seg = (x1: number, y1: number, x2: number, y2: number, t?: number): TSeg =>
+  t === undefined ? { x1, y1, x2, y2 } : { x1, y1, x2, y2, t };
 
 /** Same segment pointing in the canonical direction (left to right; top to bottom when vertical). */
 export function canon(s: TSeg): TSeg {
-  if (s.x2 < s.x1 || (s.x2 === s.x1 && s.y2 < s.y1)) return { x1: s.x2, y1: s.y2, x2: s.x1, y2: s.y1 };
-  return { x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 };
+  if (s.x2 < s.x1 || (s.x2 === s.x1 && s.y2 < s.y1)) return seg(s.x2, s.y2, s.x1, s.y1, s.t);
+  return seg(s.x1, s.y1, s.x2, s.y2, s.t);
 }
 
 interface Line {
@@ -66,36 +74,43 @@ interface Span {
   t2: number;
   p1: P;
   p2: P;
+  /** the segment's thickness */
+  th?: number;
 }
 function spanOf(l: Line, s: TSeg): Span {
   const c0 = canon(s);
   const p1 = { x: c0.x1, y: c0.y1 }, p2 = { x: c0.x2, y: c0.y2 };
-  return { t1: tOf(l, p1), t2: tOf(l, p2), p1, p2 };
+  return { t1: tOf(l, p1), t2: tOf(l, p2), p1, p2, th: s.t };
 }
-const segOf = (sp: Span): TSeg => ({ x1: sp.p1.x, y1: sp.p1.y, x2: sp.p2.x, y2: sp.p2.y });
+const segOf = (sp: Span): TSeg => seg(sp.p1.x, sp.p1.y, sp.p2.x, sp.p2.y, sp.th);
 
-function groupByLine(segs: readonly TSeg[]): Map<string, { line: Line; spans: Span[] }> {
+/** Segments grouped by supporting line; with `byThickness`, by line and thickness. */
+function groupByLine(segs: readonly TSeg[], byThickness = false): Map<string, { line: Line; spans: Span[] }> {
   const m = new Map<string, { line: Line; spans: Span[] }>();
   for (const s of segs) {
     if (isZero(s)) continue;
     const line = lineOf(s);
-    if (!m.has(line.key)) m.set(line.key, { line, spans: [] });
-    m.get(line.key)!.spans.push(spanOf(line, s));
+    const key = byThickness ? line.key + "|" + s.t : line.key;
+    if (!m.has(key)) m.set(key, { line, spans: [] });
+    m.get(key)!.spans.push(spanOf(line, s));
   }
   return m;
 }
 
-const sortSegs = (segs: TSeg[]) => segs.sort((a, b) => a.y1 - b.y1 || a.x1 - b.x1 || a.y2 - b.y2 || a.x2 - b.x2);
+const sortSegs = (segs: TSeg[]) =>
+  segs.sort((a, b) => a.y1 - b.y1 || a.x1 - b.x1 || a.y2 - b.y2 || a.x2 - b.x2 || (a.t ?? 0) - (b.t ?? 0));
 
-/** Canonical form: zero-length segments dropped, collinear segments that overlap or touch end to end merged. */
+/** Canonical form: zero-length segments dropped, collinear segments of the same thickness that overlap or touch end
+    to end merged. (Collinear segments of different thicknesses don't overlap inside one set: addEdgeSegs takes the old
+    one away under the new.) */
 export function normalizeSegs(segs: readonly TSeg[]): TSeg[] {
   const out: TSeg[] = [];
-  for (const { spans } of groupByLine(segs).values()) {
+  for (const { spans } of groupByLine(segs, true).values()) {
     spans.sort((a, b) => a.t1 - b.t1);
     let cur: Span | null = null;
     for (const sp of spans) {
       if (cur && sp.t1 <= cur.t2) {
-        if (sp.t2 > cur.t2) cur = { t1: cur.t1, p1: cur.p1, t2: sp.t2, p2: sp.p2 };
+        if (sp.t2 > cur.t2) cur = { t1: cur.t1, p1: cur.p1, t2: sp.t2, p2: sp.p2, th: cur.th };
       } else {
         if (cur) out.push(segOf(cur));
         cur = sp;
@@ -106,7 +121,8 @@ export function normalizeSegs(segs: readonly TSeg[]): TSeg[] {
   return sortSegs(out);
 }
 
-/** `segs` without the parts that lie on top of any of `cut` (collinear overlap only; crossings are kept). */
+/** `segs` without the parts that lie on top of any of `cut` (collinear overlap only; crossings are kept), whatever
+    the thicknesses; what is left keeps its own. */
 export function subtractCollinear(segs: readonly TSeg[], cut: readonly TSeg[]): TSeg[] {
   const cuts = groupByLine(cut);
   const out: TSeg[] = [];
@@ -116,8 +132,8 @@ export function subtractCollinear(segs: readonly TSeg[], cut: readonly TSeg[]): 
       let cur: Span | null = sp;
       for (const c of cs) {
         if (!cur || c.t2 <= cur.t1 || c.t1 >= cur.t2) continue;
-        if (c.t1 > cur.t1) out.push(segOf({ t1: cur.t1, p1: cur.p1, t2: c.t1, p2: c.p1 }));
-        cur = c.t2 < cur.t2 ? { t1: c.t2, p1: c.p2, t2: cur.t2, p2: cur.p2 } : null;
+        if (c.t1 > cur.t1) out.push(segOf({ ...cur, t2: c.t1, p2: c.p1 }));
+        cur = c.t2 < cur.t2 ? { ...cur, t1: c.t2, p1: c.p2 } : null;
       }
       if (cur) out.push(segOf(cur));
     }
@@ -158,7 +174,7 @@ function splitAt(s: TSeg, params: number[]): TSeg[] {
   const ts = params.map((u) => (flip ? 1 - u : u)).map((u) => sp.t1 + u * (sp.t2 - sp.t1));
   const pts: P[] = [sp.p1, ...ts.sort((a, b) => a - b).map((t) => pointAt(l, t)), sp.p2];
   const out: TSeg[] = [];
-  for (let i = 0; i + 1 < pts.length; i++) out.push({ x1: pts[i].x, y1: pts[i].y, x2: pts[i + 1].x, y2: pts[i + 1].y });
+  for (let i = 0; i + 1 < pts.length; i++) out.push(seg(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, s.t));
   return out.filter((q) => !isZero(q));
 }
 
@@ -217,7 +233,7 @@ export function splitByCells(segs: readonly TSeg[], cell: number, inside: (mx: n
 }
 
 export const translateSegs = (segs: readonly TSeg[], dx: number, dy: number): TSeg[] =>
-  segs.map((s) => ({ x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy }));
+  segs.map((s) => seg(s.x1 + dx, s.y1 + dy, s.x2 + dx, s.y2 + dy, s.t));
 
 const orient = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) =>
   Math.sign((bx - ax) * (cy - ay) - (by - ay) * (cx - ax));

@@ -368,3 +368,31 @@ test("manualMarkOf marks elements with no usable type as unclassified: missing, 
   assert.equal(UE.manualMarkOf({ typeId: "Foo" }, "stamp", V), "unclassified");
   assert.equal(UE.manualMarkOf({ typeId: "Ledge" }, "structure", V), "unclassified");
 });
+
+const BAND_TYPES = [...TYPES, { id: "Spikes", label: "Spikes label", layer: "edge", importMethod: "auto", color: "#555555", emoji: "!", band: { thickness: 1.5 } }];
+const BV = UE.vocabOf({}, BAND_TYPES);
+
+test("isBandType / bandThicknessOf: an edge type with `band` is a band edge type with that default thickness", () => {
+  assert.equal(UE.isBandType("Spikes", BV), true);
+  assert.equal(UE.bandThicknessOf("Spikes", BV), 1.5);
+  for (const id of ["Ledge", "Wall", "Gone", null, undefined]) {
+    assert.equal(UE.isBandType(id, BV), false, String(id));
+    assert.equal(UE.bandThicknessOf(id, BV), null, String(id));
+  }
+});
+
+test("buildExportDoc keeps segment thicknesses on band edge types and drops them anywhere else", () => {
+  const seg = (y, t) => ({ x1: 0, y1: y, x2: 1, y2: y, t });
+  const doc = {
+    edgeStructs: [
+      { id: "a", name: "a", typeId: "Spikes", segs: [seg(0, 0.5), { x1: 0, y1: 1, x2: 1, y2: 1 }] },
+      { id: "b", name: "b", typeId: "Ledge", segs: [seg(0, 0.5)] },
+      { id: "c", name: "c", typeId: null, segs: [seg(0, 2)] },
+    ],
+  };
+  const out = UE.buildExportDoc(doc, REGIONS, BAND_TYPES);
+  assert.deepEqual(out.edgeStructs[0].segs, doc.edgeStructs[0].segs);
+  assert.deepEqual(out.edgeStructs[1].segs, [{ x1: 0, y1: 0, x2: 1, y2: 0 }]);
+  assert.deepEqual(out.edgeStructs[2].segs, [{ x1: 0, y1: 0, x2: 1, y2: 0 }]);
+  assert.equal(doc.edgeStructs[1].segs[0].t, 0.5, "the editor document keeps it");
+});

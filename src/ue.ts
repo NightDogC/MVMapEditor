@@ -17,6 +17,8 @@ export interface FixedType {
   emoji: string;
   oldIds?: string[];
   oldLabels?: string[];
+  /** edge types only: a band edge type and its default thickness in cells (mvmap-ue.js isBandType) */
+  band?: { thickness: number };
 }
 /** What a Type dropdown offers: a fixed structure / edge type, or a stamp type from the document's categories. */
 export type ElementType = FixedType | StampType;
@@ -99,6 +101,8 @@ export interface UEApi {
   importMethodOf(typeId: string | null | undefined, layer: ElementLayer, vocab: Vocab): ImportMethod;
   typesForLayer(vocab: Vocab, layer: ElementLayer): ElementType[];
   elementTypeOf(el: Typed, layer: ElementLayer, vocab: Vocab): ElementType | null;
+  isBandType(typeId: string | null | undefined, vocab: Vocab): boolean;
+  bandThicknessOf(typeId: string | null | undefined, vocab: Vocab): number | null;
   migrateTypeIds<T extends MapDoc>(doc: T, types: FixedType[], oldStampIds?: OldStampId[]): T;
   defaultElementName(layer: ElementLayer, n: number): string;
   chooseType<T extends Typed>(el: T, layer: ElementLayer, typeId: string, vocab: Vocab): T;

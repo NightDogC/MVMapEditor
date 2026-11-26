@@ -63,6 +63,12 @@ const HELP = `
      <b>Shift</b> while dragging to lock it to 45° steps. Holding <b>Shift</b> as you press starts a new edge structure;
      clicking a segment selects it; <b>Ctrl</b>-drag erases. Segments on the same line that touch merge into one.
      Segments that share a point form one piece; <b>Select</b> picks, drags and deletes one piece at a time.</p>
+  <p><b>Band edges</b> (刺边 spikes) have a thickness: trace the terrain's surface, slopes included, and the band grows
+     into the empty side (half each way in the air; yellow when there is terrain on both sides — not imported). Set the
+     thickness of new segments in the <b>厚度 Thickness</b> box above the map while drawing; click a segment or its band
+     to change that one segment in the inspector, or <b>整片都用这个厚度</b> for the whole piece. Convex corners join to a
+     sharp point, or are cut flat when the point would stick out more than twice the thickness. A band edge and a platform
+     can share a line.</p>
   <h3>Stamps</h3>
   <p>A <b>stamp</b> drops an emoji marker the size of one cell, on the very top layer — save points, items,
      bosses, shops. Like structures, each stamp has a name and colour, and can be placed as often as you

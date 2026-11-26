@@ -7,10 +7,14 @@ import {
 } from "../state/store.ts";
 import { scheduleSave } from "../state/persist.ts";
 import { roomBBox, edgeCells, markerCell, deleteRoom, deleteDoor, deleteKey, deleteLock, createLock } from "../state/rooms.ts";
-import { sT, eT, cT, structArea, selPiece, deleteSelPiece, deleteStruct, deleteEdgeStruct, deleteStamp, removeStampPoint, deleteNote } from "../state/layers.ts";
+import {
+  sT, eT, cT, structArea, selPiece, deleteSelPiece, deleteStruct, deleteEdgeStruct, deleteStamp, removeStampPoint, deleteNote,
+  bandThickness, setSegThickness, dropThickness,
+} from "../state/layers.ts";
+import { quantizeThickness } from "../model/doc.ts";
 import { orderScope, reorderSel } from "../state/order.ts";
 import { bbox } from "../geom/region.ts";
-import { segLength } from "../geom/segs.ts";
+import { segLength, distToSeg2 } from "../geom/segs.ts";
 import { TICKS, fromT } from "../geom/lattice.ts";
 import { UE, REGIONS, IMPORT_TEXT, vocabOf, type ElementType } from "../ue.ts";
 import { setTool } from "../tools/tool.ts";
@@ -445,6 +449,8 @@ function bindTypeField(it: Structure | EdgeStruct | Stamp, layer: ElementLayer):
     pushUndo();
     for (const k of Object.keys(it)) if (!(k in next)) delete (it as unknown as Record<string, unknown>)[k]; // the choose* functions drop keys to clear them
     Object.assign(it, next);
+    // segment thicknesses belong to band edges only
+    if (layer === "edge" && bandThickness(it as EdgeStruct) == null) dropThickness(it as EdgeStruct);
     commit();
   };
   $<Sl>("#i-type").onchange = (e) => apply(UE.chooseType(it, layer, (e.target as Sl).value, vocab));
@@ -471,6 +477,43 @@ function bindAnchorField(st: Stamp): void {
     if (a === st.anchor) return;
     pushUndo();
     st.anchor = a;
+    commit();
+  };
+}
+
+/** The straight segment of a band edge picked on the map (S.sel.at lies on it), or null. */
+function pickedSeg(es: EdgeStruct) {
+  const at = S.sel && S.sel.type === "edge" && S.sel.id === es.id ? S.sel.at : null;
+  return at ? eT(es).find((g) => distToSeg2(g, at.x, at.y) < 1) || null : null;
+}
+/** "厚度 Thickness" of a band edge (spikes…): the thickness of the straight segment picked on the map, which only that
+    segment takes; "整片都用这个厚度" gives it to every segment of the selected piece. Nothing for other edge types. */
+function thicknessField(es: EdgeStruct): string {
+  const def = bandThickness(es);
+  if (def == null) return "";
+  const g = pickedSeg(es);
+  if (!g) return `<div class="fld"><label>厚度 Thickness · 格</label><div class="meta">Click one straight segment (or its band) on the map to see and change its thickness. Default ${def}.</div></div>`;
+  return `<div class="fld"><label>厚度 Thickness · 格</label>
+    <div class="inline"><span class="num-wrap" style="margin-left:0"><input type="number" id="i-thick" min="0.0625" step="0.25" value="${g.t ?? def}" /></span>
+      <button class="btn" id="i-thick-all" title="Every segment of the selected piece takes this thickness">整片都用这个厚度</button></div>
+    <div class="meta">This straight segment only (length ${n2(segLength(g) / TICKS)})${g.t === undefined ? ` · the type's default ${def}` : ""}</div></div>`;
+}
+function bindThicknessField(es: EdgeStruct): void {
+  const input = q<In>("#i-thick");
+  if (!input) return;
+  const value = () => quantizeThickness(+input.value);
+  input.onchange = () => {
+    const g = pickedSeg(es), t = value();
+    if (!g || t === undefined) return void renderInspector();
+    pushUndo();
+    setSegThickness(es, [g], t);
+    commit();
+  };
+  $("#i-thick-all").onclick = () => {
+    const pc = selPiece(), t = value();
+    if (!pc || pc.kind !== "edge" || t === undefined) return;
+    pushUndo();
+    setSegThickness(es, pc.segs, t);
     commit();
   };
 }
@@ -502,6 +545,7 @@ function inspectLayerItem(host: HTMLElement, it: Structure | EdgeStruct, isEdge:
       isEdge ? "One-way platform, ledge…" : "Breakable wall, hidden wall, lever…"
     }" /></div>
     ${typeField(it, isEdge ? "edge" : "structure")}
+    ${isEdge ? thicknessField(it as EdgeStruct) : ""}
     <div class="fld"><label>Colour</label>${colorChips(STRUCT_COLORS, it.color, "scolor")}
       <div class="color-row"><input type="color" id="i-ccolor" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : "#b8c0cc"}" /><span>Custom colour</span></div>
     </div>
@@ -526,6 +570,7 @@ function inspectLayerItem(host: HTMLElement, it: Structure | EdgeStruct, isEdge:
     scheduleSave();
   };
   bindTypeField(it, isEdge ? "edge" : "structure");
+  if (isEdge) bindThicknessField(it as EdgeStruct);
   undoOnFocus(q("#i-name"), q("#i-notes"), q("#i-ccolor"));
   host.querySelectorAll<HTMLElement>("[data-scolor]").forEach((b2) => {
     b2.onclick = () => {

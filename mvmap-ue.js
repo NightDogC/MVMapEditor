@@ -197,6 +197,18 @@
   /** The element's type, or null when it has none (no typeId, an id not in the vocabulary, or a type for another layer). */
   const elementTypeOf = (el, layer, vocab) => (el && findType(vocab, layer, el.typeId)) || null;
 
+  /* Band edges: an edge type with `band: { thickness }` (mvmap-types.js) is drawn along a terrain surface and grows a
+     thickness into the empty side. Each segment may store its own thickness `t` (cells); without one it has the type's
+     default. */
+  const bandOfType = (t) => (t && isObj(t.band) && Number.isFinite(t.band.thickness) && t.band.thickness > 0 ? t.band : null);
+  /** Whether typeId is a band edge type. */
+  const isBandType = (typeId, vocab) => !!bandOfType(findType(vocab, "edge", typeId));
+  /** A band edge type's default thickness (cells), or null when typeId isn't a band edge type. */
+  function bandThicknessOf(typeId, vocab) {
+    const band = bandOfType(findType(vocab, "edge", typeId));
+    return band ? band.thickness : null;
+  }
+
   /** The submenu a stamp type is shown in, or null (none, or a submenu id the categories don't have). */
   const submenuOfType = (vocab, t) => (t && t.submenu != null ? findIn(vocab.stamp.submenus, t.submenu) : null);
 
@@ -244,7 +256,8 @@
 
   /** Copy of the document as written to .mvmap.json: every area gets region + letter, every room gets number (null = unset),
       structures/edgeStructs keep typeId only when it names a type of their layer (unclassified = no typeId field), every
-      stamp gets its anchor (stampAnchorOf: a type that locks its anchor overrides the element's). Stamps write only what
+      stamp gets its anchor (stampAnchorOf: a type that locks its anchor overrides the element's). Segment thicknesses
+      (`t`) stay only on band edge types (isBandType). Stamps write only what
       is valid in the document's stamp categories:
       - typeId only when complete; an incomplete stamp's type goes to `pendingTypeId` instead, which the importer doesn't
         read and loading the file back turns into typeId again;
@@ -263,6 +276,9 @@
     for (const r of out.rooms || []) r.number = isRoomNumber(r.number) ? r.number : null;
     for (const [list, layer] of ELEMENT_LAYERS) {
       if (layer !== "stamp") for (const el of out[list] || []) if (!elementTypeOf(el, layer, vocab)) delete el.typeId;
+    }
+    for (const es of out.edgeStructs || []) {
+      if (!isBandType(es.typeId, vocab)) for (const g of es.segs || []) delete g.t;
     }
     for (const st of out.stamps || []) {
       const t = elementTypeOf(st, "stamp", vocab);
@@ -739,7 +755,7 @@
     setStampTierLabel, removeStampTiers, addStampTier, renameStampTier, removeStampTier, countStampsUsing,
     roomCode, parseRoomNumber, findUeFieldErrors, buildExportDoc, findRegion,
     vocabOf, fillStampCategories, stampCategoryProblems, migrateTypeData, importMethodOf,
-    typesForLayer, elementTypeOf, migrateTypeIds, defaultElementName, chooseType, manualMarkOf,
+    typesForLayer, elementTypeOf, isBandType, bandThicknessOf, migrateTypeIds, defaultElementName, chooseType, manualMarkOf,
     typePickerSections, stampCategorySections, submenuOfType, tiersOfType, tierOf, autoNameOf, chooseTier, elementStatusOf, statusLabelOf,
     STAMP_ANCHORS, defaultStampAnchor, isStampAnchorLocked, stampAnchorOf, migrateStampAnchors,
   };

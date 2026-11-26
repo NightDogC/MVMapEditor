@@ -9,6 +9,7 @@ import { TICKS } from "../geom/lattice.ts";
 import { UE, vocabOf, type Typed } from "../ue.ts";
 import { renderInspector } from "./inspector.ts";
 import { renderCategoryPanel } from "./categories.ts";
+import { renderBandBar } from "./bandbar.ts";
 import { $, esc } from "../util.ts";
 
 /** A count / size for list rows: whole numbers stay whole, fractions get up to two decimals. */
@@ -29,6 +30,7 @@ export function renderUI(): void {
   renderLists();
   renderInspector();
   renderCategoryPanel();
+  renderBandBar();
   $<HTMLButtonElement>("#btn-undo").disabled = !undoStack.length;
   $<HTMLButtonElement>("#btn-redo").disabled = !redoStack.length;
   const nm = $<HTMLInputElement>("#map-name");

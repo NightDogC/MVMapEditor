@@ -8,10 +8,11 @@ import { normalize, union, subtract, intersect, isEmpty, components, containsPoi
 import {
   pointInPoly, polyBBox, polyArea, solidArea, translatePoly, subtractRegion, intersectRegion, overlapsRegion, coveredRegion, type TPoly,
 } from "../geom/poly.ts";
-import { normalizeSegs, subtractCollinear, eraseBox, segComponents, splitByCells, translateSegs, distToSeg2, type TSeg } from "../geom/segs.ts";
+import { normalizeSegs, subtractCollinear, eraseBox, segComponents, splitByCells, translateSegs, distToSeg2, seg, type TSeg } from "../geom/segs.ts";
+import { layoutBand, landscapeSolid, type BandLayout, type SolidAt } from "../geom/band.ts";
 import { S, structById, edgeStructById } from "./store.ts";
 import { markerCell } from "./rooms.ts";
-import { UE } from "../ue.ts";
+import { UE, vocabOf } from "../ue.ts";
 import { uid, ck, unck } from "../util.ts";
 
 /* ── cached tick views (documents replace arrays on every change, so the array is the cache key) ── */
@@ -167,6 +168,55 @@ export function structPieceAt(tx: number, ty: number): { st: Structure; piece: T
   return null;
 }
 
+/* ── band edges ──────────────────────────────────────────────────── */
+/** Default thickness (cells) of an edge structure's band edge type, or null when it isn't one (mvmap-types.js `band`). */
+export const bandThickness = (es: EdgeStruct): number | null => UE.bandThicknessOf(es.typeId, vocabOf(S.doc));
+const isBand = (es: EdgeStruct) => bandThickness(es) != null;
+/** Edge structures that take collinear segments from each other: neither is a band edge. */
+const exclusive = (a: EdgeStruct, b: EdgeStruct) => !isBand(a) && !isBand(b);
+
+/** Solid Landscape of the whole document, rebuilt when a Landscape structure's rects or cuts change (they are
+    replaced, never changed in place) or a structure becomes / stops being Landscape. */
+let land: { key: object[]; solid: SolidAt } | null = null;
+function landscape(): { key: object[]; solid: SolidAt } {
+  const ls = S.doc.structures.filter((st) => st.typeId === "Landscape");
+  const key = ls.flatMap((st) => [st.rects, st.cuts || st]);
+  if (!land || land.key.length !== key.length || land.key.some((k, i) => k !== key[i])) land = { key, solid: landscapeSolid(ls) };
+  return land;
+}
+const bandCache = new WeakMap<object, { land: object; t: number; layout: BandLayout }>();
+/** How a band edge's segments grow and join (geom/band.ts), in cells, one entry per segment of eT(es); null when it
+    isn't a band edge. */
+export function bandLayoutOf(es: EdgeStruct): BandLayout | null {
+  const t = bandThickness(es);
+  if (t == null) return null;
+  const L = landscape();
+  const c = bandCache.get(es.segs);
+  if (c && c.land === L && c.t === t) return c.layout;
+  const layout = layoutBand(es.segs.map((g) => ({ x1: g.x1, y1: g.y1, x2: g.x2, y2: g.y2, t: g.t ?? t })), L.solid);
+  bandCache.set(es.segs, { land: L, t, layout });
+  return layout;
+}
+/** Thickness (cells) the Edge tool gives new segments of `es`: what the Edge tool bar says for its type this session,
+    else the type's default; null when it isn't a band edge. */
+export function drawThicknessOf(es: EdgeStruct): number | null {
+  const t = bandThickness(es);
+  return t == null ? null : (S.bandDraw[es.typeId!] ?? t);
+}
+/** Give `segs` (some of eT(es)) thickness t (cells); collinear neighbours of the same thickness merge with them. */
+export function setSegThickness(es: EdgeStruct, segs: readonly TSeg[], t: number): boolean {
+  const pick = new Set(segs);
+  if (!eT(es).some((g) => pick.has(g) && g.t !== t)) return false;
+  setEdgeT(es, eT(es).map((g) => (pick.has(g) ? seg(g.x1, g.y1, g.x2, g.y2, t) : g)));
+  return true;
+}
+/** For an edge structure whose type just stopped being a band edge: drop every segment thickness (collinear segments
+    merge again), and take the stretches it shares with other edge structures away from them, as if just drawn. */
+export function dropThickness(es: EdgeStruct): void {
+  setEdgeT(es, eT(es).map((g) => seg(g.x1, g.y1, g.x2, g.y2)));
+  addEdgeSegs(es, eT(es));
+}
+
 /* ── edge structures ─────────────────────────────────────────────── */
 export function createEdgeStruct(): EdgeStruct {
   const n = S.doc.edgeStructs.length;
@@ -176,18 +226,21 @@ export function createEdgeStruct(): EdgeStruct {
   return s;
 }
 const sameSegs = (a: TSeg[], b: TSeg[]) =>
-  a.length === b.length && a.every((s, i) => s.x1 === b[i].x1 && s.y1 === b[i].y1 && s.x2 === b[i].x2 && s.y2 === b[i].y2);
-/** Add segments to `es`; collinear overlaps leave whichever other set had them. */
+  a.length === b.length &&
+  a.every((s, i) => s.x1 === b[i].x1 && s.y1 === b[i].y1 && s.x2 === b[i].x2 && s.y2 === b[i].y2 && s.t === b[i].t);
+/** Add segments to `es`; collinear overlaps leave whichever other set had them, unless either set is a band edge (a
+    band edge and a platform can share a line). Within `es`, the new segments replace what lay under them (their
+    thickness wins). */
 export function addEdgeSegs(es: EdgeStruct, segs: TSeg[]): boolean {
   let changed = false;
   for (const o of S.doc.edgeStructs) {
-    if (o === es) continue;
+    if (o === es || !exclusive(o, es)) continue;
     const rest = subtractCollinear(eT(o), segs);
     if (sameSegs(rest, eT(o))) continue;
     setEdgeT(o, rest);
     changed = true;
   }
-  const next = normalizeSegs([...eT(es), ...segs]);
+  const next = normalizeSegs([...subtractCollinear(eT(es), segs), ...segs]);
   if (sameSegs(next, eT(es))) return changed;
   setEdgeT(es, next);
   return true;
@@ -215,21 +268,34 @@ export function deleteEdgeStruct(id: string): void {
   if (S.activeEdgeId === id) S.activeEdgeId = null;
   if (S.sel && S.sel.id === id) S.sel = null;
 }
-/** Nearest edge segment within `tol` ticks of a tick point, topmost set first on ties. */
+/** Nearest edge segment within `tol` ticks of a tick point, topmost set first on ties; failing that, the topmost band
+    edge segment whose band (or a bevel at its end) holds the point. */
 export function edgeSegAt(tx: number, ty: number, tol: number): { es: EdgeStruct; seg: TSeg; piece: TSeg[] } | null {
   let best: { es: EdgeStruct; seg: TSeg; piece: TSeg[] } | null = null, bd = tol * tol;
   for (let i = S.doc.edgeStructs.length - 1; i >= 0; i--) {
     const es = S.doc.edgeStructs[i];
     for (const piece of ePieces(es))
-      for (const seg of piece) {
-        const d = distToSeg2(seg, tx, ty);
+      for (const g of piece) {
+        const d = distToSeg2(g, tx, ty);
         if (d < bd) {
           bd = d;
-          best = { es, seg, piece };
+          best = { es, seg: g, piece };
         }
       }
   }
-  return best;
+  if (best) return best;
+  const cx = tx / TICKS, cy = ty / TICKS;
+  for (let i = S.doc.edgeStructs.length - 1; i >= 0; i--) {
+    const es = S.doc.edgeStructs[i];
+    const layout = bandLayoutOf(es);
+    if (!layout) continue;
+    let k = layout.segs.findIndex((b) => pointInPoly(b.poly, cx, cy));
+    if (k < 0) k = layout.bevels.find((b) => pointInPoly(b.poly, cx, cy))?.of[0] ?? -1;
+    if (k < 0) continue;
+    const g = eT(es)[k];
+    return { es, seg: g, piece: ePieces(es).find((p) => p.includes(g))! };
+  }
+  return null;
 }
 
 /* ── stamps ──────────────────────────────────────────────────────── */
@@ -384,7 +450,8 @@ export function beginEdgeMove(es: EdgeStruct, piece: TSeg[]) {
   return (dx: number, dy: number) => {
     const moved = translateSegs(piece, dx, dy);
     for (const [o, b] of base) {
-      if (o === es) setEdgeT(o, [...own, ...moved]);
+      if (o === es) setEdgeT(o, [...subtractCollinear(own, moved), ...moved]);
+      else if (!exclusive(o, es)) o.segs = b.segs;
       else {
         const rest = subtractCollinear(b.t, moved);
         if (sameSegs(rest, b.t)) o.segs = b.segs;

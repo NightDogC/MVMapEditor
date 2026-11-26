@@ -20,6 +20,8 @@ npm run build      # type-check and build into dist/
 npm run preview    # serve the built dist/
 ```
 
+While `npm run dev` runs, the page exposes `window.__mv` (`S` the state, `loadDoc(json)` opens a map, `app`, `migrateDoc`): to check a change on screen without clicking through Import, load a map from the console or a browser tool (`__mv.loadDoc({...})`), set `__mv.S.cam` and screenshot. After editing `mvmap-types.js` or `mvmap-ue.js`, hard-refresh (`Ctrl+Shift+R`): they are plain scripts the browser may keep cached.
+
 The build in `dist/` is static and uses relative paths, so it can be served from any folder of any static host. It does need to be served over HTTP — browsers don't run module scripts from `file://`.
 
 `mvmap-types.js` and `mvmap-ue.js` stay plain scripts at the repo root (they are shared with the UE importer, its node tests and `export_mvmap_stamp_icons.py`); the page loads them before the app and the build copies them next to `index.html`. The editor warns and stops working without them.
@@ -63,6 +65,10 @@ So the interesting part of the design isn't the level geometry. It's the depende
 **Negative structure (S-Neg, `G`)** — cuts a polygon out of the *active* structure, for slopes, ramps and other shapes rectangles can't make. Click the corners one by one (they snap like edge endpoints; `Shift` locks a side to 45° steps), then click the first corner again — or press `Enter` — to close the outline; the polygon's area is taken out of the structure. `Backspace`, `Ctrl`-click or right-click takes the last corner back, `Esc` drops the polygon, and a corner that would make the outline cross or touch itself is refused. Only the active structure is cut (pick it with Select or in its list first); other structures and rooms are untouched. Parts of the polygon that run along the grid simply leave the structure's rectangles; only a polygon with a slanted side is kept as a *cut*. Painting over a cut fills it again, and cuts move, copy and paste with their piece and travel with a moved room. Areas shown in the list and the inspector leave the cuts out.
 
 **Edge structures** — named, coloured sets of line segments, drawn as thick bars: platforms, ledges, one-way floors. With the **Edge** tool, drag from one snap point to another to lay a segment at any angle; hold `Shift` while dragging to lock it to 45° steps (`Shift` held as you press starts a new edge structure). Click a segment to select it; `Ctrl`-drag erases. Segments on one line that touch or overlap merge, and an overlap with another edge structure goes to the one drawn last; crossings are allowed.
+
+**Band edges (spikes, 刺边)** — an edge type with a thickness: trace the surface of the terrain (`Landscape`, slopes cut with S-Neg included) and the band grows from the line into the empty side, drawn hatched in the type's colour. With such an element active, the Edge tool shows a **厚度 Thickness** box (cells, starting at the type's default, 1 for 刺边); new segments take that value. The band is what the UE importer turns into spikes (it then shrinks the outside a little): a line with terrain on one side grows its full thickness into the other; one in the air grows half each way; one with terrain on both sides is drawn yellow and won't be imported. Where two segments end at the same point on a convex corner, both bands extend to a sharp point; when that point would reach more than twice a segment's thickness past it, the corner is cut flat instead (a triangle fills the gap). Concave corners and points where three segments meet are left as they are. Click a straight segment, or inside its band, to see its thickness in the inspector: changing it changes just that segment, **整片都用这个厚度** gives it to the whole piece. Band edges and other edge structures (a platform under the spikes) can share a line without taking it from each other; erasing cuts both.
+
+![刺边 along a ground, a slope and a ledge top (convex corners bevelled, concave corner overlapping), a platform sharing the ledge line, a band in the air centred on its line, and a block with a thicker right side and a yellow segment inside the terrain](docs/images/band-edges.png)
 
 Both kinds get their own list in the left rail, an inspector with name, colour (palette or custom picker) and notes, and can be selected and dragged with the Select tool. Clicking on the map selects only the connected *piece* under the pointer — dragging moves it (snapped) and `Del` deletes it — so the separate parts of one structure stay independent (pick the structure in its list to select every piece): rectangles connect along a side (corner contact doesn't count), and segments connect when they share any point. Toggle them with **Show structures** / **Show structure names**.
 
@@ -247,7 +253,9 @@ Mouse: scroll to zoom, middle-drag to pan.
 
   "edgeStructs": [
     { "id": "edge_e1", "name": "Ledge", "color": "#f0a13a", "notes": "",
-      "segs": [ { "x1": 3, "y1": 5, "x2": 5, "y2": 5 }, { "x1": 5, "y1": 5, "x2": 6.5, "y2": 3.5 } ] }
+      "segs": [ { "x1": 3, "y1": 5, "x2": 5, "y2": 5 }, { "x1": 5, "y1": 5, "x2": 6.5, "y2": 3.5 } ] },
+    { "id": "edge_e2", "name": "刺边", "color": "#e0555f", "notes": "", "typeId": "DamageEdge",
+      "segs": [ { "x1": 8, "y1": 6, "x2": 12, "y2": 6, "t": 1 }, { "x1": 12, "y1": 6, "x2": 12, "y2": 9, "t": 0.5 } ] }
   ]
 }
 ```
@@ -279,7 +287,7 @@ Mouse: scroll to zoom, middle-drag to pan.
 
 **`hideName: true`** may appear on rooms, structures, edge structures, stamps, notes and keys to hide that object's label on the map. When absent the name is shown.
 
-**Edge-structure segments** are `{ x1, y1, x2, y2 }`, any angle. Within one edge structure, segments on the same line that touch or overlap are merged, so the list never repeats a stretch; across edge structures a stretch belongs to at most one (crossings are fine). Segments are stored pointing left to right, or top to bottom when vertical.
+**Edge-structure segments** are `{ x1, y1, x2, y2 }`, any angle. Within one edge structure, segments on the same line that touch or overlap are merged, so the list never repeats a stretch; across edge structures a stretch belongs to at most one (crossings are fine). Segments are stored pointing left to right, or top to bottom when vertical. On band edge types (`band` in `mvmap-types.js`) a segment may carry `t`, its thickness in cells (a positive number; absent means the type's default); only segments with the same `t` merge, a band edge never takes a stretch from another edge structure or gives one up, and export drops `t` on every other type. Which side a band grows into and how corners join is in `src/geom/band.ts`; the UE importer follows the same rules, tested against the shared cases in `test/band-edge-cases.json`.
 
 **Grey-box data** (`detail`) from older files is dropped on load: 2.0 has no grey-box editor, since rooms are now laid out directly on the map.
 
@@ -333,15 +341,17 @@ mvmap-ue.js         pure helpers for the UE import fields (validation, room code
 src/
   model/            document types, newDoc, migrate (incl. 1.x -> 2.0), colours and emoji
   geom/             tick lattice and snap steps, rect regions (union / subtract / canonical form / pieces / outline),
-                    segments (merge / cut / pieces), polygons for structure cuts (clipping against rects, area)
+                    segments (merge / cut / pieces), polygons for structure cuts (clipping against rects, area),
+                    band edges (which side a band grows into, corner joins)
   state/            runtime state, undo, storage, snapping, room / door / key edits, off-grid layer edits, pencil
   render/           camera, grid / rooms / doors / keys, structures / edges / stamps / markers, notes, render loop
   tools/            pointer and keyboard input, tool shortcuts
-  ui/               panels, inspector, stamp category panel, snap bar, pencil bar, modals
+  ui/               panels, inspector, stamp category panel, snap bar, pencil bar, band edge thickness bar, modals
   io/               JSON import / export, PNG export
   styles/           app.css
 test/               node --test: vocabulary, UE helpers, geometry, 1.x migration, stamp point ids, stamp categories and
-                    their edits
+                    their edits, band edges (band-edge-cases.json: the cases shared with the UE importer);
+                    with-vocabulary.mts gives node the browser globals of mvmap-types.js / mvmap-ue.js
 docs/2.0-design.md  2.0 design decisions
 export_mvmap_stamp_icons.py   renders the emoji of every stamp type and of manual structure / edge types as UE placeholder icons (reads the stamp font from src/);
                               `--map <file>.mvmap.json` takes the stamp types from that map's categories, types designers added included,

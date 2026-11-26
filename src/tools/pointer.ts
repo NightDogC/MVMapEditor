@@ -8,7 +8,7 @@ import { noteHit } from "../render/notes.ts";
 import { CELL } from "../model/constants.ts";
 import { TICKS, toT, fromT, roundTo } from "../geom/lattice.ts";
 import { normalize, bbox, type TRect } from "../geom/region.ts";
-import { distToSeg2, type TSeg } from "../geom/segs.ts";
+import { distToSeg2, seg, type TSeg } from "../geom/segs.ts";
 import {
   S, app, requestDraw, commit, flushUI, pushUndo, recordUndo, snapshot, reindex, selExists,
   roomById, keyById, noteById, stampById, structById, edgeStructById, roomAtCell, doorAtEdge,
@@ -20,7 +20,7 @@ import {
 } from "../state/rooms.ts";
 import {
   sT, eT, createStruct, paintStructArea, eraseStructArea, dropEmptyStructs, structPieceAt,
-  createEdgeStruct, addEdgeSegs, eraseEdgeBox, dropEmptyEdgeStructs, edgeSegAt,
+  createEdgeStruct, addEdgeSegs, eraseEdgeBox, dropEmptyEdgeStructs, edgeSegAt, drawThicknessOf,
   createStamp, placeStamp, moveStampPoint, stampSpotTaken, removeStampPoint, stampAt, keyAt, createNoteAt, deleteNote,
   beginStructMove, beginEdgeMove,
 } from "../state/layers.ts";
@@ -162,7 +162,7 @@ function applyEdgeLine(d: any): void {
   pushUndo();
   let es = d.fresh ? null : activeEdgeStruct();
   if (!es) es = createEdgeStruct();
-  addEdgeSegs(es, [{ x1: d.a.x, y1: d.a.y, x2: d.b.x, y2: d.b.y }]);
+  addEdgeSegs(es, [seg(d.a.x, d.a.y, d.b.x, d.b.y, drawThicknessOf(es) ?? undefined)]);
   S.sel = { type: "edge", id: es.id };
   S.activeEdgeId = es.id;
   dropEmptyEdgeStructs();
