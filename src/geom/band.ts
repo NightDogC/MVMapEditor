@@ -7,13 +7,11 @@
      the band grows t into the other. Empty on both: t/2 each way. Solid on both: blocked (the editor draws it as a
      warning, the importer reports it and builds nothing).
    - Joins: where exactly two segments of the element end at the same point (nothing else touching it) and their bands
-     form a convex corner there (each has a face on the outside of the corner), a right-angle corner joins pointed:
-     both extend along their own direction until their outer faces meet, whatever their thicknesses. Any other convex
-     corner, and a right angle where either would extend by more than twice its own thickness, gets a bevel instead:
-     neither extends and the triangle between the point and the two outer corners is filled. (The importer builds each
-     band as a rotated box; boxes extended to the point of a corner that isn't square would stick out past it.)
-     Concave corners, collinear segments, points where three or more segments meet, and corners with a blocked segment
-     (it won't be imported) are left alone. */
+     form a convex corner there (each has a face on the outside of the corner), the corner gets a bevel: the triangle
+     between the point and the two bands' outer corners is filled, whatever the angle and the thicknesses. Bands never
+     extend past their segment (designers asked for right angles to be bevelled too, 2026-11-26). Concave corners,
+     collinear segments, points where three or more segments meet, and corners with a blocked segment (it won't be
+     imported) are left alone. */
 
 import { TICKS } from "./lattice.ts";
 import { pointInPoly, type XY } from "./poly.ts";
@@ -34,9 +32,6 @@ export interface BandSegLayout {
   side: "one" | "both" | "blocked";
   /** unit normal the band grows toward (side one); the segment's left normal otherwise */
   toward: XY;
-  /** extension past (x1, y1) / (x2, y2) for a pointed join */
-  ext1: number;
-  ext2: number;
   /** the band's outline: four corners */
   poly: XY[];
 }
@@ -54,8 +49,6 @@ export interface BandLayout {
 
 /** How far from the segment the empty side is probed: half a tick. */
 const PROBE = 0.5 / TICKS;
-/** How far a pointed join may reach past a segment, in its own thickness. */
-const MAX_MITER = 2;
 const EPS = 1e-9;
 
 interface Landscape {
@@ -99,7 +92,6 @@ const onSegment = (s: BandSeg, p: XY) => {
 /** Lay out one band edge element: which way each segment grows, and how its corners join. */
 export function layoutBand(segs: readonly BandSeg[], solid: SolidAt): BandLayout {
   const sides = segs.map((s) => sideOf(s, solid));
-  const ext = segs.map(() => [0, 0]);
   const bevels: BandBevel[] = [];
 
   // segment ends grouped by point
@@ -122,8 +114,7 @@ export function layoutBand(segs: readonly BandSeg[], solid: SolidAt): BandLayout
     // directions from the point into each segment
     const u = a.end ? neg(sides[a.i].dir) : sides[a.i].dir;
     const v = b.end ? neg(sides[b.i].dir) : sides[b.i].dir;
-    const uv = cross(u, v);
-    if (Math.abs(uv) < 1e-9) continue; // collinear (or folded back)
+    if (Math.abs(cross(u, v)) < 1e-9) continue; // collinear (or folded back)
     const w = add(u, v); // into the wedge between them, the inside of the corner
     // each band's face on the outside of the corner: the normal pointing away from w, and its reach that way
     const outer = (k: number) => {
@@ -132,26 +123,16 @@ export function layoutBand(segs: readonly BandSeg[], solid: SolidAt): BandLayout
     };
     const A = outer(a.i), B = outer(b.i);
     if (A.d <= EPS || B.d <= EPS) continue; // concave: the bands overlap there
-    // P + dA·nA − s·u = P + dB·nB − r·v
-    const c = add({ x: B.n.x * B.d, y: B.n.y * B.d }, A.n, -A.d);
-    const s = -cross(c, v) / uv;
-    const r = -cross(c, u) / uv;
-    const tooFar = s > MAX_MITER * segs[a.i].t + EPS || r > MAX_MITER * segs[b.i].t + EPS;
-    if (tooFar || Math.abs(dot(u, v)) > EPS) {
-      bevels.push({ at: P, of: [a.i, b.i], poly: [P, add(P, A.n, A.d), add(P, B.n, B.d)] });
-      continue;
-    }
-    ext[a.i][a.end] = Math.max(0, s);
-    ext[b.i][b.end] = Math.max(0, r);
+    bevels.push({ at: P, of: [a.i, b.i], poly: [P, add(P, A.n, A.d), add(P, B.n, B.d)] });
   }
 
   return {
     segs: segs.map((s, i) => {
       const sd = sides[i];
-      const e1 = add({ x: s.x1, y: s.y1 }, sd.dir, -ext[i][0]);
-      const e2 = add({ x: s.x2, y: s.y2 }, sd.dir, ext[i][1]);
+      const e1 = { x: s.x1, y: s.y1 };
+      const e2 = { x: s.x2, y: s.y2 };
       const poly = [add(e1, sd.n, sd.pos), add(e2, sd.n, sd.pos), add(e2, sd.n, -sd.neg), add(e1, sd.n, -sd.neg)];
-      return { side: sd.side, toward: sd.toward, ext1: ext[i][0], ext2: ext[i][1], poly };
+      return { side: sd.side, toward: sd.toward, poly };
     }),
     bevels,
   };

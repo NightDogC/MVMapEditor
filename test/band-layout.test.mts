@@ -10,7 +10,7 @@ interface Case {
   landscape: { rects: { x: number; y: number; w: number; h: number }[]; cuts?: { x: number; y: number }[][] }[];
   segs: { x1: number; y1: number; x2: number; y2: number; t: number }[];
   expect: {
-    segs: { side: "one" | "both" | "blocked"; toward?: [number, number]; ext1: number; ext2: number }[];
+    segs: { side: "one" | "both" | "blocked"; toward?: [number, number] }[];
     bevels: { at: [number, number] }[];
   };
 }
@@ -29,8 +29,6 @@ for (const c of cases) {
         near(got.toward.x, e.toward[0], `seg ${i} toward x`);
         near(got.toward.y, e.toward[1], `seg ${i} toward y`);
       }
-      near(got.ext1, e.ext1, `seg ${i} ext1`);
-      near(got.ext2, e.ext2, `seg ${i} ext2`);
     });
     assert.equal(out.bevels.length, c.expect.bevels.length, "bevels");
     c.expect.bevels.forEach((e, i) => {
@@ -40,7 +38,7 @@ for (const c of cases) {
   });
 }
 
-test("band layout: the band's outline grows t into the empty side, extended at a pointed join", () => {
+test("band layout: the band's outline grows t into the empty side and ends with its segment; a right angle gets a bevel", () => {
   const out = layoutBand(
     [
       { x1: 0, y1: 0, x2: 4, y2: 0, t: 1 },
@@ -49,8 +47,9 @@ test("band layout: the band's outline grows t into the empty side, extended at a
     landscapeSolid([{ rects: [{ x: 0, y: 0, w: 4, h: 4 }] }])
   );
   const box = (p: { x: number; y: number }[]) => [Math.min(...p.map((v) => v.x)), Math.min(...p.map((v) => v.y)), Math.max(...p.map((v) => v.x)), Math.max(...p.map((v) => v.y))];
-  assert.deepEqual(box(out.segs[0].poly), [0, -1, 5, 0]);
-  assert.deepEqual(box(out.segs[1].poly), [4, -1, 5, 4]);
+  assert.deepEqual(box(out.segs[0].poly), [0, -1, 4, 0]);
+  assert.deepEqual(box(out.segs[1].poly), [4, 0, 5, 4]);
+  assert.deepEqual(out.bevels[0].poly.map((v) => `${v.x},${v.y}`).sort(), ["4,-1", "4,0", "5,0"]);
 });
 
 test("band layout: a bevel fills the triangle between the corner point and the two outer corners", () => {
