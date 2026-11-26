@@ -7,12 +7,13 @@
      the band grows t into the other. Empty on both: t/2 each way. Solid on both: blocked (the editor draws it as a
      warning, the importer reports it and builds nothing).
    - Joins: where exactly two segments of the element end at the same point (nothing else touching it) and their bands
-     form a convex corner there (each has a face on the outside of the corner), both extend along their own direction
-     until their outer faces meet (a pointed join), whatever their thicknesses. A segment whose outer face already
-     reaches that meeting point (a much thicker neighbour at an obtuse corner) doesn't extend. When either would extend
-     by more than twice its own thickness, neither extends and the triangle between the point and the two outer
-     corners is filled instead (a bevel). Concave corners, collinear segments, points where three or more segments
-     meet, and corners with a blocked segment (it won't be imported) are left alone. */
+     form a convex corner there (each has a face on the outside of the corner), a right-angle corner joins pointed:
+     both extend along their own direction until their outer faces meet, whatever their thicknesses. Any other convex
+     corner, and a right angle where either would extend by more than twice its own thickness, gets a bevel instead:
+     neither extends and the triangle between the point and the two outer corners is filled. (The importer builds each
+     band as a rotated box; boxes extended to the point of a corner that isn't square would stick out past it.)
+     Concave corners, collinear segments, points where three or more segments meet, and corners with a blocked segment
+     (it won't be imported) are left alone. */
 
 import { TICKS } from "./lattice.ts";
 import { pointInPoly, type XY } from "./poly.ts";
@@ -135,7 +136,8 @@ export function layoutBand(segs: readonly BandSeg[], solid: SolidAt): BandLayout
     const c = add({ x: B.n.x * B.d, y: B.n.y * B.d }, A.n, -A.d);
     const s = -cross(c, v) / uv;
     const r = -cross(c, u) / uv;
-    if (s > MAX_MITER * segs[a.i].t + EPS || r > MAX_MITER * segs[b.i].t + EPS) {
+    const tooFar = s > MAX_MITER * segs[a.i].t + EPS || r > MAX_MITER * segs[b.i].t + EPS;
+    if (tooFar || Math.abs(dot(u, v)) > EPS) {
       bevels.push({ at: P, of: [a.i, b.i], poly: [P, add(P, A.n, A.d), add(P, B.n, B.d)] });
       continue;
     }

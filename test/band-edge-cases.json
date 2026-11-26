@@ -5,8 +5,8 @@
     "segs: one band edge element, every segment with its thickness t. expect.segs[i] is about segs[i]:",
     "  side: one (solid on one side: grows t toward the other), both (empty on both sides: t/2 each way), blocked (solid on both sides: drawn as a warning, not imported)",
     "  toward: for side one, the unit normal pointing to where it grows",
-    "  ext1 / ext2: how far the band is extended past (x1, y1) / (x2, y2) to make a pointed join",
-    "expect.bevels: points where two segments meet at a convex corner but a pointed join would reach more than 2 t past one of them: no extension there, a triangle fills the gap instead.",
+    "  ext1 / ext2: how far the band is extended past (x1, y1) / (x2, y2) to make a pointed join (right-angle convex corners only)",
+    "expect.bevels: points where two segments meet at a convex corner that isn't a right angle, or at a right angle where a pointed join would reach more than 2 t past one of them: no extension there, a triangle fills the gap instead. (The importer builds bands as rotated boxes, which extended to the point of a corner that isn't square would stick out past it; 2026-11-26.)",
     "A segment whose outer face already passes the meeting point (a negative extension) extends by 0; a corner with a blocked segment doesn't join at all.",
     "Numbers compare to within 0.001."
   ],
@@ -93,7 +93,7 @@
       }
     },
     {
-      "name": "obtuse convex corner (slope meets flat top) and a concave corner (flat meets slope): only the convex one joins",
+      "name": "obtuse convex corner (slope meets flat top) and a concave corner (flat meets slope): the convex one isn't square, so bevel; the concave one is left alone",
       "landscape": [
         {
           "rects": [{ "x": 0, "y": 4, "w": 4, "h": 2 }, { "x": 4, "y": 2, "w": 8, "h": 4 }],
@@ -108,14 +108,14 @@
       "expect": {
         "segs": [
           { "side": "one", "toward": [0, -1], "ext1": 0, "ext2": 0 },
-          { "side": "one", "toward": [-0.4472, -0.8944], "ext1": 0, "ext2": 0.2361 },
-          { "side": "one", "toward": [0, -1], "ext1": 0.2361, "ext2": 0 }
+          { "side": "one", "toward": [-0.4472, -0.8944], "ext1": 0, "ext2": 0 },
+          { "side": "one", "toward": [0, -1], "ext1": 0, "ext2": 0 }
         ],
-        "bevels": []
+        "bevels": [{ "at": [8, 2] }]
       }
     },
     {
-      "name": "the same, with the slope thinner: the pointed join would reach past 2 t on the slope, so bevel",
+      "name": "the same, with the slope thinner: a bevel too (the pointed join would also reach past 2 t on the slope)",
       "landscape": [
         {
           "rects": [{ "x": 0, "y": 4, "w": 4, "h": 2 }, { "x": 4, "y": 2, "w": 8, "h": 4 }],
@@ -137,7 +137,7 @@
       }
     },
     {
-      "name": "obtuse convex corner, slope much thicker than the flat: the slope's face already covers the point, only the flat extends",
+      "name": "obtuse convex corner, slope much thicker than the flat (the slope's face already covers the point): not square, so bevel",
       "landscape": [
         {
           "rects": [{ "x": 0, "y": 4, "w": 4, "h": 2 }, { "x": 4, "y": 2, "w": 8, "h": 4 }],
@@ -151,9 +151,9 @@
       "expect": {
         "segs": [
           { "side": "one", "toward": [-0.4472, -0.8944], "ext1": 0, "ext2": 0 },
-          { "side": "one", "toward": [0, -1], "ext1": 0.7361, "ext2": 0 }
+          { "side": "one", "toward": [0, -1], "ext1": 0, "ext2": 0 }
         ],
-        "bevels": []
+        "bevels": [{ "at": [8, 2] }]
       }
     },
     {
@@ -172,7 +172,7 @@
       }
     },
     {
-      "name": "acute convex corner (63.4°): pointed join within 2 t",
+      "name": "acute convex corner (63.4°): not square, so bevel, though a pointed join would stay within 2 t",
       "landscape": [{ "rects": [{ "x": 0, "y": 0, "w": 4, "h": 2 }], "cuts": [[{ "x": 0, "y": 0 }, { "x": 4, "y": 0 }, { "x": 0, "y": 2 }]] }],
       "segs": [
         { "x1": 0, "y1": 2, "x2": 4, "y2": 0, "t": 1 },
@@ -180,14 +180,14 @@
       ],
       "expect": {
         "segs": [
-          { "side": "one", "toward": [-0.4472, -0.8944], "ext1": 0, "ext2": 1.618 },
-          { "side": "one", "toward": [1, 0], "ext1": 1.618, "ext2": 0 }
+          { "side": "one", "toward": [-0.4472, -0.8944], "ext1": 0, "ext2": 0 },
+          { "side": "one", "toward": [1, 0], "ext1": 0, "ext2": 0 }
         ],
-        "bevels": []
+        "bevels": [{ "at": [4, 0] }]
       }
     },
     {
-      "name": "acute convex corner (45°): the pointed join would reach 2.414 t, so bevel",
+      "name": "acute convex corner (45°): a bevel (the pointed join would also reach 2.414 t)",
       "landscape": [{ "rects": [{ "x": 0, "y": 0, "w": 2, "h": 2 }], "cuts": [[{ "x": 0, "y": 0 }, { "x": 2, "y": 0 }, { "x": 0, "y": 2 }]] }],
       "segs": [
         { "x1": 0, "y1": 2, "x2": 2, "y2": 0, "t": 1 },
